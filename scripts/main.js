@@ -25,8 +25,8 @@ Hooks.once("ready", () => {
   });
 });
 
-Hooks.on("updateToken", (tokenDoc, changes) => {
-  console.log("Token updated", tokenDoc.name, changes);
+Hooks.on("updateTokenDocument", (tokenDoc, changes) => {
+  console.log("Token document updated", tokenDoc.name, changes);
 
   for (let i = 1; i <= 4; i++) {
     const display = activeDisplays[i];
@@ -34,6 +34,18 @@ Hooks.on("updateToken", (tokenDoc, changes) => {
 
     const actorId = game.settings.get(MODULE_ID, `player${i}ActorId`);
     if (tokenDoc.actor?.id === actorId) {
+      display.refresh();
+    }
+  }
+});
+
+Hooks.on("refreshToken", (token) => {
+  for (let i = 1; i <= 4; i++) {
+    const display = activeDisplays[i];
+    if (!display) continue;
+
+    const actorId = game.settings.get(MODULE_ID, `player${i}ActorId`);
+    if (token.actor?.id === actorId) {
       display.refresh();
     }
   }
