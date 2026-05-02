@@ -29,30 +29,34 @@ Hooks.once("ready", () => {
     name: "simple-companion",
     title: "Simple Companion",
     icon: "fas fa-tablet-alt",
-    layer: "controls",
+    layer: "token",
     tools: [
       {
         name: "open-display-1",
         title: "Open Display 1",
         icon: "fas fa-tv",
+        button: true,
         onClick: () => new PlayerDisplay(1).render(true)
       },
       {
         name: "open-display-2",
         title: "Open Display 2",
         icon: "fas fa-tv",
+        button: true,
         onClick: () => new PlayerDisplay(2).render(true)
       },
       {
         name: "open-display-3",
         title: "Open Display 3",
         icon: "fas fa-tv",
+        button: true,
         onClick: () => new PlayerDisplay(3).render(true)
       },
       {
         name: "open-display-4",
         title: "Open Display 4",
         icon: "fas fa-tv",
+        button: true,
         onClick: () => new PlayerDisplay(4).render(true)
       }
     ]
