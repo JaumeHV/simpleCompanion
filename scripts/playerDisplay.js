@@ -1,15 +1,18 @@
 const MODULE_ID = "simple-companion";
 
+export const activeDisplays = {};
+
 export class PlayerDisplay extends Application {
   constructor(displayIndex, options = {}) {
-    super(options);
-    this.displayIndex = displayIndex;
+  super(options);
+  this.displayIndex = displayIndex;
+  activeDisplays[displayIndex] = this;
   }
 
   static get defaultOptions() {
     return mergeObject(super.defaultOptions, {
       id: "simple-companion-display",
-      template: null, // we’ll render manually
+      template: null,
       popOut: true,
       width: 400,
       height: 300,
@@ -51,5 +54,9 @@ export class PlayerDisplay extends Application {
         <p>HP: ${data.hp}</p>
       </div>
     `;
+  }
+
+  refresh() {
+    this.render(false);
   }
 }

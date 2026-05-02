@@ -1,5 +1,5 @@
 import { registerSettings } from "./settings.js";
-import { PlayerDisplay } from "./playerDisplay.js";
+import { PlayerDisplay, activeDisplays } from "./playerDisplay.js";
 
 const MODULE_ID = "simple-companion";
 
@@ -12,10 +12,50 @@ Hooks.once("ready", () => {
   console.log(`${MODULE_ID} | Ready`);
   ui.notifications.info("Simple Companion loaded.");
 
-  setTimeout(() => {
+  // refresh displays when actor data changes
+  Hooks.on("updateActor", (actor) => {
     for (let i = 1; i <= 4; i++) {
-      console.log(`${MODULE_ID} | Opening Display ${i}`);
-      new PlayerDisplay(i).render(true);
+      const display = activeDisplays[i];
+      if (!display) continue;
+
+      const actorId = game.settings.get(MODULE_ID, `player${i}ActorId`);
+      if (actorId === actor.id) {
+        display.refresh();
+      }
     }
-  }, 1000);
+  });
+    Hooks.on("getSceneControlButtons", (controls) => {
+  controls.push({
+    name: "simple-companion",
+    title: "Simple Companion",
+    icon: "fas fa-tablet-alt",
+    layer: "controls",
+    tools: [
+      {
+        name: "open-display-1",
+        title: "Open Display 1",
+        icon: "fas fa-tv",
+        onClick: () => new PlayerDisplay(1).render(true)
+      },
+      {
+        name: "open-display-2",
+        title: "Open Display 2",
+        icon: "fas fa-tv",
+        onClick: () => new PlayerDisplay(2).render(true)
+      },
+      {
+        name: "open-display-3",
+        title: "Open Display 3",
+        icon: "fas fa-tv",
+        onClick: () => new PlayerDisplay(3).render(true)
+      },
+      {
+        name: "open-display-4",
+        title: "Open Display 4",
+        icon: "fas fa-tv",
+        onClick: () => new PlayerDisplay(4).render(true)
+      }
+    ]
+  });
+});
 });
