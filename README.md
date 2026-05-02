@@ -1,12 +1,12 @@
 # simpleCompanion
 
-<!-- SCOPE -->
+## SCOPE
 This module aims to create way for players to use a dedicated small touch 
 display as a companion interface, created to enhance inperson play where 
 direct interaction with a main screen is not viable.
 
 
-<!-- FEATURES -->
+## FEATURES
 - Player-specific UI configurable for custom displays
 - Popout-based character sheets, turn order, chat interaction and other
   static elements
@@ -15,7 +15,7 @@ direct interaction with a main screen is not viable.
 - Utilise touch-based placement and confirmation interactions
 
 
-<!-- LICENSE -->
+## LICENSE
 As the author has no plans to maintain or extend this module outside of
 a hyper-specific scope, it is distributed under the Unlicense License.
 
