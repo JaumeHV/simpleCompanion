@@ -12,7 +12,6 @@ Hooks.once("ready", () => {
   console.log(`${MODULE_ID} | Ready`);
   ui.notifications.info("Simple Companion loaded.");
 
-  // refresh displays when actor data changes
   Hooks.on("updateActor", (actor) => {
     for (let i = 1; i <= 4; i++) {
       const display = activeDisplays[i];
@@ -24,7 +23,9 @@ Hooks.once("ready", () => {
       }
     }
   });
-    Hooks.on("getSceneControlButtons", (controls) => {
+});
+
+Hooks.on("getSceneControlButtons", (controls) => {
   controls.push({
     name: "simple-companion",
     title: "Simple Companion",
@@ -61,5 +62,4 @@ Hooks.once("ready", () => {
       }
     ]
   });
-});
 });
