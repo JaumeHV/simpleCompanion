@@ -80,17 +80,26 @@ export class PlayerDisplay extends Application {
     `;
   }
 
-  async render(...args) {
-    await super.render(...args);
-    this.drawViewport();
+  activateListeners(html) {
+    super.activateListeners(html);
+
+    setTimeout(() => {
+      this.drawViewport(this.element[0]);
+    }, 50);
   }
 
-  drawViewport() {
+  drawViewport(rootElement) {
     const token = this.getToken();
-    if (!token) return;
+    if (!token) {
+      console.warn("Simple Companion | No token found");
+      return;
+    }
 
-    const viewport = this.element.find("#simple-companion-viewport")[0];
-    if (!viewport) return;
+    const viewport = rootElement.querySelector("#simple-companion-viewport");
+    if (!viewport) {
+      console.warn("Simple Companion | Viewport not found");
+      return;
+    }
 
     viewport.innerHTML = "";
 
@@ -131,7 +140,7 @@ export class PlayerDisplay extends Application {
     dot.style.borderRadius = "50%";
     dot.style.border = "2px solid white";
     dot.title = label;
-
+    dot.style.zIndex = "10";
     viewport.appendChild(dot);
   }
 
