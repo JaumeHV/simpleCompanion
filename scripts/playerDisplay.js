@@ -118,9 +118,10 @@ export class PlayerDisplay extends Application {
       `;
     }
 
-    let dots = "";
+    let tokensHtml = "";
 
-    dots += this.buildDotHtml(centerX, centerY, 24, "#44d9ff", token.name);
+    tokensHtml += this.buildTokenHtml(centerX, centerY, 32, token);
+    tokensHtml += this.buildLabelHtml(centerX, centerY, 32, token.name);
 
     for (const otherToken of canvas.tokens.placeables) {
       if (otherToken.id === token.id) continue;
@@ -136,8 +137,8 @@ export class PlayerDisplay extends Application {
 
       if (screenX < -50 || screenX > 410 || screenY < -50 || screenY > 410) continue;
 
-      const color = otherToken.document.disposition < 0 ? "#ff5555" : "#55ff88";
-      dots += this.buildDotHtml(screenX, screenY, 18, color, otherToken.name);
+      tokensHtml += this.buildTokenHtml(screenX, screenY, 28, otherToken);
+      tokensHtml += this.buildLabelHtml(screenX, screenY, 28, otherToken.name);
     }
 
     return `
@@ -149,12 +150,12 @@ export class PlayerDisplay extends Application {
         position: relative;
         width: 360px;
         height: 360px;
-        background: #111;
-        border: 2px solid #555;
+        background: #0a0a0a;
+        border: 2px solid #777;
         overflow: hidden;
       ">
         ${grid}
-        ${dots}
+        ${tokensHtml}
 
         <div style="
           position:absolute;
@@ -165,6 +166,7 @@ export class PlayerDisplay extends Application {
           background:rgba(0,0,0,0.6);
           padding:3px 6px;
           border-radius:4px;
+          z-index: 30;
         ">
           5 ft
         </div>
@@ -172,9 +174,57 @@ export class PlayerDisplay extends Application {
     `;
   }
 
-  buildDotHtml(x, y, size, color, label) {
+  buildLabelHtml(x, y, size, name) {
     return `
-      <div title="${label}" style="
+      <div style="
+        position: absolute;
+        left: ${x}px;
+        top: ${y + size / 2 + 2}px;
+        transform: translateX(-50%);
+        font-size: 10px;
+        color: white;
+        background: rgba(0,0,0,0.65);
+        padding: 2px 4px;
+        border-radius: 3px;
+        white-space: nowrap;
+        pointer-events: none;
+        z-index: 20;
+      ">
+        ${name}
+      </div>
+    `;
+  }
+
+  buildTokenHtml(x, y, size, token) {
+    const img = token.document.texture?.src;
+
+    if (img) {
+      return `
+        <div title="${token.name}" style="
+          position: absolute;
+          left: ${x - size / 2}px;
+          top: ${y - size / 2}px;
+          width: ${size}px;
+          height: ${size}px;
+          border-radius: 50%;
+          border: 2px solid white;
+          overflow: hidden;
+          z-index: 10;
+          background: #222;
+        ">
+          <img src="${img}" style="
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+          ">
+        </div>
+      `;
+    }
+
+    const color = token.document.disposition < 0 ? "#ff5555" : "#55ff88";
+
+    return `
+      <div title="${token.name}" style="
         position: absolute;
         left: ${x - size / 2}px;
         top: ${y - size / 2}px;
