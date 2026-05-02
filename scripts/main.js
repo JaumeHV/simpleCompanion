@@ -25,7 +25,9 @@ Hooks.once("ready", () => {
   });
 });
 
-Hooks.on("updateToken", (tokenDoc) => {
+Hooks.on("updateToken", (tokenDoc, changes) => {
+  console.log("Token updated", tokenDoc.name, changes);
+
   for (let i = 1; i <= 4; i++) {
     const display = activeDisplays[i];
     if (!display) continue;
