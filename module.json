@@ -1,0 +1,21 @@
+{
+  "id": "foundry-table-companion",
+  "title": "Foundry Table Companion",
+  "description": "Foundry module to setup dedicated touch displays to be used by players as a companion interface alongside a main screen.",
+  "version": "0.0.1",
+  "authors": [
+    {
+      "name": "J.P."
+    }
+  ],
+  "compatibility": {
+    "minimum": "13",
+    "verified": "13"
+  },
+  "esmodules": [
+    "scripts/main.js"
+  ],
+  "styles": [
+    "styles/companion.css"
+  ]
+}
