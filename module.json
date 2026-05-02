@@ -19,6 +19,9 @@
     "styles/companion.css"
   ],
 
-  "manifest": "https://raw.githubusercontent.com/JaumeHV/simpleCompanion/main/module.json",
-  "download": "https://github.com/JaumeHV/simpleCompanion/archive/refs/heads/main.zip"
+  "url": "https://github.com/JaumeHV/simpleCompanion",
+  "bugs": "https://github.com/JaumeHV/simpleCompanion/issues",
+
+  "manifest": "https://github.com/JaumeHV/simpleCompanion/releases/latest/download/module.json",
+  "download": "https://github.com/JaumeHV/simpleCompanion/releases/download/v0.0.1/module.zip"
 }
