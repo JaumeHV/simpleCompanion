@@ -55,7 +55,7 @@ export class PlayerDisplay extends Application {
   activateListeners(html) {
     super.activateListeners(html);
 
-    const viewport = html[0].querySelector("#simple-companion-viewport");
+    const viewport = html.find("#simple-companion-viewport")[0];
     if (!viewport) return;
 
     viewport.addEventListener("click", (event) => {
@@ -64,47 +64,45 @@ export class PlayerDisplay extends Application {
   }
 
   handleViewportClick(event, viewport) {
-  const token = this.getToken();
-  if (!token) return;
+    const token = this.getToken();
+    if (!token) return;
 
-  const rect = viewport.getBoundingClientRect();
+    const rect = viewport.getBoundingClientRect();
 
-  const clickX = event.clientX - rect.left;
-  const clickY = event.clientY - rect.top;
+    const clickX = event.clientX - rect.left;
+    const clickY = event.clientY - rect.top;
 
-  const centerX = 180;
-  const centerY = 180;
-  const pixelsPerGrid = 36;
-  const gridSize = canvas.grid.size;
+    const centerX = 180;
+    const centerY = 180;
+    const pixelsPerGrid = 36;
+    const gridSize = canvas.grid.size;
 
-  const offsetGridX = Math.round((clickX - centerX) / pixelsPerGrid);
-  const offsetGridY = Math.round((clickY - centerY) / pixelsPerGrid);
+    const offsetGridX = Math.round((clickX - centerX) / pixelsPerGrid);
+    const offsetGridY = Math.round((clickY - centerY) / pixelsPerGrid);
 
-  const tokenCenterX = token.x + gridSize / 2;
-  const tokenCenterY = token.y + gridSize / 2;
+    const tokenCenterX = token.x + gridSize / 2;
+    const tokenCenterY = token.y + gridSize / 2;
 
-  const sceneCenterX = tokenCenterX + offsetGridX * gridSize;
-  const sceneCenterY = tokenCenterY + offsetGridY * gridSize;
+    const sceneCenterX = tokenCenterX + offsetGridX * gridSize;
+    const sceneCenterY = tokenCenterY + offsetGridY * gridSize;
 
-  const sceneX = sceneCenterX - gridSize / 2;
-  const sceneY = sceneCenterY - gridSize / 2;
+    const sceneX = sceneCenterX - gridSize / 2;
+    const sceneY = sceneCenterY - gridSize / 2;
 
-  console.log("Simple Companion | Viewport click", {
-    display: this.displayIndex,
-    clickX,
-    clickY,
-    offsetGridX,
-    offsetGridY,
-    sceneX,
-    sceneY,
-    sceneCenterX,
-    sceneCenterY
-  });
+    console.log("Simple Companion | Viewport click", {
+      display: this.displayIndex,
+      clickX,
+      clickY,
+      offsetGridX,
+      offsetGridY,
+      sceneX,
+      sceneY,
+      sceneCenterX,
+      sceneCenterY
+    });
 
-  ui.notifications.info(
-    `Grid offset: ${offsetGridX}, ${offsetGridY}`
-  );
-}
+    ui.notifications.info(`Grid offset: ${offsetGridX}, ${offsetGridY}`);
+  }
 
   buildViewportHtml() {
     const token = this.getToken();
