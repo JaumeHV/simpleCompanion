@@ -2,8 +2,8 @@
 
 ## SCOPE
 This module aims to create way for players to use a dedicated small touch 
-display as a companion interface, created to enhance inperson play where 
-direct interaction with a main screen is not viable.
+display as a companion interface, created for use in a specific setup to 
+enhance inperson play where interaction with a main screen is not viable.
 
 
 ## FEATURES
@@ -16,8 +16,10 @@ direct interaction with a main screen is not viable.
 
 
 ## LICENSE
-As the author has no plans to maintain or extend this module outside of
-a hyper-specific scope, it is distributed under the Unlicense License.
+As I (the Author) created this module for a very specific purpose and 
+have no plans to maintain or extend its functionality outside of this 
+use case, I am distributing it the Unlicense License as I believe it 
+may be useful for others and could be a fun module to play around with.
 
 The author encourages any interested parties to modify it as they wish. 
 This is free and unencumbered software released into the public domain.

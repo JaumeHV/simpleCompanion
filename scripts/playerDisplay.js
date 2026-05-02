@@ -37,12 +37,7 @@ export class PlayerDisplay extends Application {
   async getData() {
     const actor = this.getActor();
 
-    if (!actor) {
-      return {
-        name: "No Actor Assigned",
-        hp: "-"
-      };
-    }
+    if (!actor) return { name: "No Actor Assigned", hp: "-" };
 
     const hp = actor.system.attributes.hp;
 
@@ -52,66 +47,19 @@ export class PlayerDisplay extends Application {
     };
   }
 
-  async _renderInner() {
-    const data = await this.getData();
+  buildViewportHtml() {
     const token = this.getToken();
-
-    let content = `<p>No token on current scene</p>`;
-
-    if (token) {
-      content = `
-        <div id="simple-companion-viewport" style="
-          position: relative;
-          width: 360px;
-          height: 360px;
-          background: #111;
-          border: 2px solid #555;
-          overflow: hidden;
-        "></div>
-      `;
-    }
-
-    return `
-      <div style="padding:20px; font-size:16px;">
-        <h2>Display ${this.displayIndex}: ${data.name}</h2>
-        <p>HP: ${data.hp}</p>
-        ${content}
-      </div>
-    `;
-  }
-
-  activateListeners(html) {
-    super.activateListeners(html);
-
-    setTimeout(() => {
-      this.drawViewport(this.element[0]);
-    }, 50);
-  }
-
-  drawViewport(rootElement) {
-    const token = this.getToken();
-    if (!token) {
-      console.warn("Simple Companion | No token found");
-      return;
-    }
-
-    const viewport = rootElement.querySelector("#simple-companion-viewport");
-    if (!viewport) {
-      console.warn("Simple Companion | Viewport not found");
-      return;
-    }
-
-    viewport.innerHTML = "";
+    if (!token) return `<p>No token on current scene</p>`;
 
     const centerX = 180;
     const centerY = 180;
     const pixelsPerGrid = 36;
     const gridSize = canvas.grid.size;
 
-    // Player token
-    this.drawDot(viewport, centerX, centerY, 24, "#44d9ff", token.name);
+    let dots = "";
 
-    // Other tokens relative to player token
+    dots += this.buildDotHtml(centerX, centerY, 24, "#44d9ff", token.name);
+
     for (const otherToken of canvas.tokens.placeables) {
       if (otherToken.id === token.id) continue;
 
@@ -124,24 +72,49 @@ export class PlayerDisplay extends Application {
       if (screenX < -50 || screenX > 410 || screenY < -50 || screenY > 410) continue;
 
       const color = otherToken.document.disposition < 0 ? "#ff5555" : "#55ff88";
-      this.drawDot(viewport, screenX, screenY, 18, color, otherToken.name);
+      dots += this.buildDotHtml(screenX, screenY, 18, color, otherToken.name);
     }
+
+    return `
+      <div id="simple-companion-viewport" style="
+        position: relative;
+        width: 360px;
+        height: 360px;
+        background: #111;
+        border: 2px solid #555;
+        overflow: hidden;
+      ">
+        ${dots}
+      </div>
+    `;
   }
 
-  drawDot(viewport, x, y, size, color, label) {
-    const dot = document.createElement("div");
+  buildDotHtml(x, y, size, color, label) {
+    return `
+      <div title="${label}" style="
+        position: absolute;
+        left: ${x - size / 2}px;
+        top: ${y - size / 2}px;
+        width: ${size}px;
+        height: ${size}px;
+        background: ${color};
+        border-radius: 50%;
+        border: 2px solid white;
+        z-index: 10;
+      "></div>
+    `;
+  }
 
-    dot.style.position = "absolute";
-    dot.style.left = `${x - size / 2}px`;
-    dot.style.top = `${y - size / 2}px`;
-    dot.style.width = `${size}px`;
-    dot.style.height = `${size}px`;
-    dot.style.background = color;
-    dot.style.borderRadius = "50%";
-    dot.style.border = "2px solid white";
-    dot.title = label;
-    dot.style.zIndex = "10";
-    viewport.appendChild(dot);
+  async _renderInner() {
+    const data = await this.getData();
+
+    return `
+      <div style="padding:20px; font-size:16px;">
+        <h2>Display ${this.displayIndex}: ${data.name}</h2>
+        <p>HP: ${data.hp}</p>
+        ${this.buildViewportHtml()}
+      </div>
+    `;
   }
 
   refresh() {
