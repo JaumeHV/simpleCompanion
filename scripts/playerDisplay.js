@@ -56,6 +56,91 @@ export class PlayerDisplay extends Application {
   const pixelsPerGrid = 36;
   const gridSize = canvas.grid.size;
 
+  const tokenCenterX = token.x + gridSize / 2;
+  const tokenCenterY = token.y + gridSize / 2;
+
+  let grid = "";
+
+  for (let x = centerX % pixelsPerGrid; x < 360; x += pixelsPerGrid) {
+    grid += `
+      <div style="
+        position:absolute;
+        left:${x}px;
+        top:0;
+        width:1px;
+        height:360px;
+        background:#333;
+      "></div>
+    `;
+  }
+
+  for (let y = centerY % pixelsPerGrid; y < 360; y += pixelsPerGrid) {
+    grid += `
+      <div style="
+        position:absolute;
+        left:0;
+        top:${y}px;
+        width:360px;
+        height:1px;
+        background:#333;
+      "></div>
+    `;
+  }
+
+  let dots = "";
+
+  dots += this.buildDotHtml(centerX, centerY, 24, "#44d9ff", token.name);
+
+  for (const otherToken of canvas.tokens.placeables) {
+    if (otherToken.id === token.id) continue;
+
+    const otherCenterX = otherToken.x + gridSize / 2;
+    const otherCenterY = otherToken.y + gridSize / 2;
+
+    const dx = (otherCenterX - tokenCenterX) / gridSize;
+    const dy = (otherCenterY - tokenCenterY) / gridSize;
+
+    const screenX = centerX + dx * pixelsPerGrid;
+    const screenY = centerY + dy * pixelsPerGrid;
+
+    if (screenX < -50 || screenX > 410 || screenY < -50 || screenY > 410) continue;
+
+    const color = otherToken.document.disposition < 0 ? "#ff5555" : "#55ff88";
+    dots += this.buildDotHtml(screenX, screenY, 18, color, otherToken.name);
+  }
+
+  return `
+    <div style="margin-bottom:8px; font-size:13px; color:#aaa;">
+      Local tactical viewport — 1 square = 5 ft
+    </div>
+
+    <div id="simple-companion-viewport" style="
+      position: relative;
+      width: 360px;
+      height: 360px;
+      background: #111;
+      border: 2px solid #555;
+      overflow: hidden;
+    ">
+      ${grid}
+      ${dots}
+
+      <div style="
+        position:absolute;
+        left:10px;
+        bottom:10px;
+        font-size:12px;
+        color:#aaa;
+        background:rgba(0,0,0,0.6);
+        padding:3px 6px;
+        border-radius:4px;
+      ">
+        5 ft
+      </div>
+    </div>
+  `;
+}
+
   let grid = "";
 
   for (let x = centerX % pixelsPerGrid; x < 360; x += pixelsPerGrid) {
