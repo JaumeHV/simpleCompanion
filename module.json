@@ -1,11 +1,11 @@
 {
-  "id": "foundry-table-companion",
-  "title": "Foundry Table Companion",
-  "description": "Foundry module to setup dedicated touch displays to be used by players as a companion interface alongside a main screen.",
+  "id": "simpleCompanion",
+  "title": "simpleCompanion",
+  "description": "Player companion for custom displays used in HVS tabletop build.",
   "version": "0.0.1",
   "authors": [
     {
-      "name": "J.P."
+      "name": "Jaume Pirie"
     }
   ],
   "compatibility": {
@@ -17,5 +17,8 @@
   ],
   "styles": [
     "styles/companion.css"
-  ]
+  ],
+
+  "manifest": "https://raw.githubusercontent.com/JaumeHV/simpleCompanion/main/module.json",
+  "download": "https://github.com/JaumeHV/simpleCompanion/archive/refs/heads/main.zip"
 }
