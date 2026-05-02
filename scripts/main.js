@@ -26,40 +26,43 @@ Hooks.once("ready", () => {
 });
 
 Hooks.on("getSceneControlButtons", (controls) => {
-  controls.push({
+  console.log(`${MODULE_ID} | Registering scene controls`, controls);
+
+  controls["simple-companion"] = {
     name: "simple-companion",
     title: "Simple Companion",
     icon: "fas fa-tablet-alt",
-    layer: "token",
-    tools: [
-      {
+    layer: "tokens",
+    activeTool: "open-display-1",
+    tools: {
+      "open-display-1": {
         name: "open-display-1",
         title: "Open Display 1",
         icon: "fas fa-tv",
         button: true,
         onClick: () => new PlayerDisplay(1).render(true)
       },
-      {
+      "open-display-2": {
         name: "open-display-2",
         title: "Open Display 2",
         icon: "fas fa-tv",
         button: true,
         onClick: () => new PlayerDisplay(2).render(true)
       },
-      {
+      "open-display-3": {
         name: "open-display-3",
         title: "Open Display 3",
         icon: "fas fa-tv",
         button: true,
         onClick: () => new PlayerDisplay(3).render(true)
       },
-      {
+      "open-display-4": {
         name: "open-display-4",
         title: "Open Display 4",
         icon: "fas fa-tv",
         button: true,
         onClick: () => new PlayerDisplay(4).render(true)
       }
-    ]
-  });
+    }
+  };
 });
