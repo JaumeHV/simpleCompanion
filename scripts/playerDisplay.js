@@ -45,15 +45,31 @@ export class PlayerDisplay extends Application {
   }
 
   async _renderInner() {
-    const data = await this.getData();
+  const data = await this.getData();
+  const token = this.getToken();
 
-    return `
-      <div style="padding:20px; font-size:20px;">
-        <h2>Display ${this.displayIndex}</h2>
-        <p><strong>${data.name}</strong></p>
-        <p>HP: ${data.hp}</p>
-      </div>
-    `;
+  let position = "No token on current scene";
+
+  if (token) {
+    position = `x: ${Math.round(token.x)}, y: ${Math.round(token.y)}`;
+  }
+
+  return `
+    <div style="padding:20px; font-size:20px;">
+      <h2>Display ${this.displayIndex}</h2>
+      <p><strong>${data.name}</strong></p>
+      <p>HP: ${data.hp}</p>
+      <p>Position: ${position}</p>
+    </div>
+  `;
+  }
+
+  getToken() {
+    const actor = this.getActor();
+    if (!actor) return null;
+
+    const tokens = actor.getActiveTokens();
+    return tokens.length ? tokens[0] : null;
   }
 
   refresh() {

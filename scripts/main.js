@@ -25,6 +25,18 @@ Hooks.once("ready", () => {
   });
 });
 
+Hooks.on("updateToken", (tokenDoc) => {
+  for (let i = 1; i <= 4; i++) {
+    const display = activeDisplays[i];
+    if (!display) continue;
+
+    const actorId = game.settings.get(MODULE_ID, `player${i}ActorId`);
+    if (tokenDoc.actor?.id === actorId) {
+      display.refresh();
+    }
+  }
+});
+
 Hooks.on("getSceneControlButtons", (controls) => {
   controls["simple-companion"] = {
     name: "simple-companion",
