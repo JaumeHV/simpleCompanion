@@ -52,15 +52,21 @@ export class PlayerDisplay extends Application {
     };
   }
 
-  activateListeners(html) {
-    super.activateListeners(html);
+  // test method: attaching listener to viewport after render
+  async _render(...args) {
+    await super._render(...args);
 
-    const viewport = html.find("#simple-companion-viewport")[0];
-    if (!viewport) return;
+    const viewport = this.element.find("#simple-companion-viewport")[0];
+    if (!viewport) {
+      console.warn("Simple Companion | viewport not found");
+      return;
+    }
 
-    viewport.addEventListener("click", (event) => {
+    viewport.onclick = (event) => {
       this.handleViewportClick(event, viewport);
-    });
+    };
+
+    console.log("Simple Companion | viewport click listener attached");
   }
 
   buildViewportHtml() {
@@ -78,55 +84,19 @@ export class PlayerDisplay extends Application {
     let grid = "";
 
     for (let x = centerX - pixelsPerGrid / 2; x >= 0; x -= pixelsPerGrid) {
-      grid += `
-        <div style="
-          position:absolute;
-          left:${x}px;
-          top:0;
-          width:1px;
-          height:360px;
-          background:#333;
-        "></div>
-      `;
+      grid += `<div style="position:absolute; left:${x}px; top:0; width:1px; height:360px; background:#333;"></div>`;
     }
 
     for (let x = centerX + pixelsPerGrid / 2; x < 360; x += pixelsPerGrid) {
-      grid += `
-        <div style="
-          position:absolute;
-          left:${x}px;
-          top:0;
-          width:1px;
-          height:360px;
-          background:#333;
-        "></div>
-      `;
+      grid += `<div style="position:absolute; left:${x}px; top:0; width:1px; height:360px; background:#333;"></div>`;
     }
 
     for (let y = centerY - pixelsPerGrid / 2; y >= 0; y -= pixelsPerGrid) {
-      grid += `
-        <div style="
-          position:absolute;
-          left:0;
-          top:${y}px;
-          width:360px;
-          height:1px;
-          background:#333;
-        "></div>
-      `;
+      grid += `<div style="position:absolute; left:0; top:${y}px; width:360px; height:1px; background:#333;"></div>`;
     }
 
     for (let y = centerY + pixelsPerGrid / 2; y < 360; y += pixelsPerGrid) {
-      grid += `
-        <div style="
-          position:absolute;
-          left:0;
-          top:${y}px;
-          width:360px;
-          height:1px;
-          background:#333;
-        "></div>
-      `;
+      grid += `<div style="position:absolute; left:0; top:${y}px; width:360px; height:1px; background:#333;"></div>`;
     }
 
     let tokensHtml = "";
@@ -167,20 +137,6 @@ export class PlayerDisplay extends Application {
       ">
         ${grid}
         ${tokensHtml}
-
-        <div style="
-          position:absolute;
-          left:10px;
-          bottom:10px;
-          font-size:12px;
-          color:#aaa;
-          background:rgba(0,0,0,0.6);
-          padding:3px 6px;
-          border-radius:4px;
-          z-index: 30;
-        ">
-          5 ft
-        </div>
       </div>
     `;
   }
@@ -188,18 +144,16 @@ export class PlayerDisplay extends Application {
   buildLabelHtml(x, y, size, name) {
     return `
       <div style="
-        position: absolute;
-        left: ${x}px;
-        top: ${y + size / 2 + 2}px;
-        transform: translateX(-50%);
-        font-size: 10px;
-        color: white;
-        background: rgba(0,0,0,0.65);
-        padding: 2px 4px;
-        border-radius: 3px;
-        white-space: nowrap;
-        pointer-events: none;
-        z-index: 20;
+        position:absolute;
+        left:${x}px;
+        top:${y + size / 2 + 2}px;
+        transform:translateX(-50%);
+        font-size:10px;
+        color:white;
+        background:rgba(0,0,0,0.65);
+        padding:2px 4px;
+        border-radius:3px;
+        z-index:20;
       ">
         ${name}
       </div>
@@ -211,23 +165,18 @@ export class PlayerDisplay extends Application {
 
     if (img) {
       return `
-        <div title="${token.name}" style="
-          position: absolute;
-          left: ${x - size / 2}px;
-          top: ${y - size / 2}px;
-          width: ${size}px;
-          height: ${size}px;
-          border-radius: 50%;
-          border: 2px solid white;
-          overflow: hidden;
-          z-index: 10;
-          background: #222;
+        <div style="
+          position:absolute;
+          left:${x - size / 2}px;
+          top:${y - size / 2}px;
+          width:${size}px;
+          height:${size}px;
+          border-radius:50%;
+          border:2px solid white;
+          overflow:hidden;
+          background:#222;
         ">
-          <img src="${img}" style="
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-          ">
+          <img src="${img}" style="width:100%; height:100%; object-fit:cover;">
         </div>
       `;
     }
@@ -235,29 +184,16 @@ export class PlayerDisplay extends Application {
     const color = token.document.disposition < 0 ? "#ff5555" : "#55ff88";
 
     return `
-      <div title="${token.name}" style="
-        position: absolute;
-        left: ${x - size / 2}px;
-        top: ${y - size / 2}px;
-        width: ${size}px;
-        height: ${size}px;
-        background: ${color};
-        border-radius: 50%;
-        border: 2px solid white;
-        z-index: 10;
+      <div style="
+        position:absolute;
+        left:${x - size / 2}px;
+        top:${y - size / 2}px;
+        width:${size}px;
+        height:${size}px;
+        background:${color};
+        border-radius:50%;
+        border:2px solid white;
       "></div>
-    `;
-  }
-
-  async _renderInner() {
-    const data = await this.getData();
-
-    return `
-      <div style="padding:20px; font-size:16px;">
-        <h2>Display ${this.displayIndex}: ${data.name}</h2>
-        <p>HP: ${data.hp}</p>
-        ${this.buildViewportHtml()}
-      </div>
     `;
   }
 
@@ -278,21 +214,7 @@ export class PlayerDisplay extends Application {
     const offsetGridX = Math.round((clickX - centerX) / pixelsPerGrid);
     const offsetGridY = Math.round((clickY - centerY) / pixelsPerGrid);
 
-    const tokenCenterX = token.x + gridSize / 2;
-    const tokenCenterY = token.y + gridSize / 2;
-
-    const sceneCenterX = tokenCenterX + offsetGridX * gridSize;
-    const sceneCenterY = tokenCenterY + offsetGridY * gridSize;
-
-    console.log("Simple Companion | Viewport click", {
-      display: this.displayIndex,
-      clickX,
-      clickY,
-      offsetGridX,
-      offsetGridY,
-      sceneCenterX,
-      sceneCenterY
-    });
+    console.log("Viewport click", { offsetGridX, offsetGridY });
 
     ui.notifications.info(`Selected: ${offsetGridX}, ${offsetGridY}`);
   }
