@@ -52,6 +52,17 @@ export class PlayerDisplay extends Application {
     };
   }
 
+  activateListeners(html) {
+    super.activateListeners(html);
+
+    const viewport = html.find("#simple-companion-viewport")[0];
+    if (!viewport) return;
+
+    viewport.addEventListener("click", (event) => {
+      this.handleViewportClick(event, viewport);
+    });
+  }
+
   buildViewportHtml() {
     const token = this.getToken();
     if (!token) return `<p>No token on current scene</p>`;
@@ -248,6 +259,42 @@ export class PlayerDisplay extends Application {
         ${this.buildViewportHtml()}
       </div>
     `;
+  }
+
+  handleViewportClick(event, viewport) {
+    const token = this.getToken();
+    if (!token) return;
+
+    const rect = viewport.getBoundingClientRect();
+
+    const clickX = event.clientX - rect.left;
+    const clickY = event.clientY - rect.top;
+
+    const centerX = 180;
+    const centerY = 180;
+    const pixelsPerGrid = 36;
+    const gridSize = canvas.grid.size;
+
+    const offsetGridX = Math.round((clickX - centerX) / pixelsPerGrid);
+    const offsetGridY = Math.round((clickY - centerY) / pixelsPerGrid);
+
+    const tokenCenterX = token.x + gridSize / 2;
+    const tokenCenterY = token.y + gridSize / 2;
+
+    const sceneCenterX = tokenCenterX + offsetGridX * gridSize;
+    const sceneCenterY = tokenCenterY + offsetGridY * gridSize;
+
+    console.log("Simple Companion | Viewport click", {
+      display: this.displayIndex,
+      clickX,
+      clickY,
+      offsetGridX,
+      offsetGridY,
+      sceneCenterX,
+      sceneCenterY
+    });
+
+    ui.notifications.info(`Selected: ${offsetGridX}, ${offsetGridY}`);
   }
 
   refresh() {
