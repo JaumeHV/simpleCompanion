@@ -66,7 +66,7 @@ export class PlayerDisplay extends Application {
 
     let grid = "";
 
-    for (let x = centerX % pixelsPerGrid; x < 360; x += pixelsPerGrid) {
+    for (let x = centerX - pixelsPerGrid / 2; x >= 0; x -= pixelsPerGrid) {
       grid += `
         <div style="
           position:absolute;
@@ -79,7 +79,33 @@ export class PlayerDisplay extends Application {
       `;
     }
 
-    for (let y = centerY % pixelsPerGrid; y < 360; y += pixelsPerGrid) {
+    for (let x = centerX + pixelsPerGrid / 2; x < 360; x += pixelsPerGrid) {
+      grid += `
+        <div style="
+          position:absolute;
+          left:${x}px;
+          top:0;
+          width:1px;
+          height:360px;
+          background:#333;
+        "></div>
+      `;
+    }
+
+    for (let y = centerY - pixelsPerGrid / 2; y >= 0; y -= pixelsPerGrid) {
+      grid += `
+        <div style="
+          position:absolute;
+          left:0;
+          top:${y}px;
+          width:360px;
+          height:1px;
+          background:#333;
+        "></div>
+      `;
+    }
+
+    for (let y = centerY + pixelsPerGrid / 2; y < 360; y += pixelsPerGrid) {
       grid += `
         <div style="
           position:absolute;
