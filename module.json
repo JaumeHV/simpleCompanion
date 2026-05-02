@@ -1,7 +1,7 @@
 {
-  "id": "simpleCompanion-v0.0.1-alpha",
-  "title": "simpleCompanion",
-  "description": "Player companion for custom displays used in HVS tabletop build.",
+  "id": "simple-companion",
+  "title": "Simple Companion",
+  "description": "D&D 5e+ player companion with custom UI for displays used in HVS tabletop build.",
   "version": "0.0.1",
   "authors": [
     {
