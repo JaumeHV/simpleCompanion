@@ -6,7 +6,8 @@ const GRID_PIXELS = 72;
 const GRID_COLOR = "#333";
 const TOKEN_SIZE_PLAYER = 64;
 const TOKEN_SIZE_OTHER = 56;
-const PANEL_CHAT_MESSAGE_LIMIT = 20;
+const SIDE_PANEL_WIDTH = 420;
+const SIDE_PANEL_HEIGHT = 720;
 
 export const activeDisplays = {};
 
@@ -269,86 +270,108 @@ export class PlayerDisplay extends Application {
     `;
   }
 
-  buildCombatPanelHtml() {
-    const combats = collectionValues(game.combats);
-    if (!combats.length) {
-      return `<div style="padding:14px; color:#aaa;">No combat encounters.</div>`;
+  buildTurnOrderPanelHtml() {
+    const combat = game.combat;
+    if (!combat) {
+      return `<div style="padding:14px; color:#aaa;">No active combat encounter.</div>`;
     }
 
-    return combats.map((combat) => {
-      const isCurrent = game.combat?.id === combat.id;
-      const sceneName = escapeHtml(combat.scene?.name ?? "Unknown Scene");
-      const round = escapeHtml(combat.round ?? "-");
-      const turn = escapeHtml((combat.turn ?? 0) + 1);
-      const activeCombatantId = isCurrent ? combat.combatant?.id : null;
-      const combatants = collectionValues(combat.turns ?? combat.combatants);
+    const canRoll = combat.canUserModify(game.user, "update");
+    const sceneName = escapeHtml(combat.scene?.name ?? "Unknown Scene");
+    const round = escapeHtml(combat.round ?? "-");
+    const turn = escapeHtml((combat.turn ?? 0) + 1);
+    const activeCombatantId = combat.combatant?.id;
+    const combatants = collectionValues(combat.turns ?? combat.combatants);
 
-      const combatantsHtml = combatants.map((combatant) => {
-        const isTurn = activeCombatantId && combatant.id === activeCombatantId;
-        const name = escapeHtml(combatant.name);
-        const initiative = combatant.initiative ?? "-";
-
-        return `
-          <div style="
-            display:flex;
-            align-items:center;
-            gap:8px;
-            padding:8px 10px;
-            background:${isTurn ? "rgba(190, 130, 45, 0.28)" : "rgba(255,255,255,0.04)"};
-            border-bottom:1px solid rgba(255,255,255,0.07);
-          ">
-            <div style="width:28px; color:#c4cad5; text-align:right;">${escapeHtml(initiative)}</div>
-            <div style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${name}</div>
-          </div>
-        `;
-      }).join("");
+    const combatantsHtml = combatants.map((combatant) => {
+      const isTurn = activeCombatantId && combatant.id === activeCombatantId;
+      const name = escapeHtml(combatant.name);
+      const initiative = combatant.initiative ?? "-";
+      const initiativeHtml = combatant.initiative == null && canRoll
+        ? `<button type="button" data-companion-roll-initiative="${combatant.id}" title="Roll Initiative" style="
+            width:34px;
+            height:28px;
+            border:1px solid #656d7c;
+            background:#273140;
+            color:#fff;
+            cursor:pointer;
+          "><i class="fas fa-dice-d20"></i></button>`
+        : `<div style="width:34px; color:#c4cad5; text-align:right;">${escapeHtml(initiative)}</div>`;
 
       return `
-        <section style="border-bottom:1px solid #3a3f49;">
-          <div style="padding:10px 12px; background:#181b22;">
-            <div style="display:flex; justify-content:space-between; gap:8px; color:#fff;">
-              <strong style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${sceneName}</strong>
-              <span style="color:#c4cad5;">R${round} T${turn}</span>
-            </div>
+        <div style="
+          display:flex;
+          align-items:center;
+          gap:8px;
+          padding:8px 10px;
+          background:${isTurn ? "rgba(190, 130, 45, 0.28)" : "rgba(255,255,255,0.04)"};
+          border-bottom:1px solid rgba(255,255,255,0.07);
+        ">
+          ${initiativeHtml}
+          <div style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${name}</div>
+          <div style="width:18px; text-align:center; color:${isTurn ? "#f3c16b" : "#6f7785"};">
+            ${isTurn ? `<i class="fas fa-arrow-right"></i>` : ""}
           </div>
-          ${combatantsHtml || `<div style="padding:10px 12px; color:#aaa;">No combatants.</div>`}
-        </section>
+        </div>
       `;
     }).join("");
+
+    const rollActionsHtml = canRoll
+      ? `
+        <div style="display:flex; gap:8px; padding:10px 12px; border-bottom:1px solid #3a3f49;">
+          <button type="button" data-companion-roll-all style="flex:1; height:34px; border:1px solid #656d7c; background:#273140; color:#fff; cursor:pointer;">
+            <i class="fas fa-dice-d20"></i> Roll All
+          </button>
+          <button type="button" data-companion-roll-npc style="flex:1; height:34px; border:1px solid #656d7c; background:#273140; color:#fff; cursor:pointer;">
+            <i class="fas fa-users"></i> Roll NPCs
+          </button>
+        </div>
+      `
+      : "";
+
+    return `
+      <section>
+        <div style="padding:10px 12px; background:#181b22; border-bottom:1px solid #3a3f49;">
+          <div style="display:flex; justify-content:space-between; gap:8px; color:#fff;">
+            <strong style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${sceneName}</strong>
+            <span style="color:#c4cad5;">R${round} T${turn}</span>
+          </div>
+        </div>
+        ${rollActionsHtml}
+        ${combatantsHtml || `<div style="padding:10px 12px; color:#aaa;">No combatants.</div>`}
+      </section>
+    `;
   }
 
   buildChatPanelHtml() {
-    const messages = collectionValues(game.messages).slice(-PANEL_CHAT_MESSAGE_LIMIT).reverse();
-    if (!messages.length) {
-      return `<div style="padding:14px; color:#aaa;">No chat messages.</div>`;
-    }
-
-    return messages.map((message) => {
-      const speaker = escapeHtml(message.speaker?.alias ?? message.user?.name ?? "Unknown");
-      const content = escapeHtml(String(message.content ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
-
-      return `
-        <article style="
-          padding:10px 12px;
-          border-bottom:1px solid rgba(255,255,255,0.08);
-          background:rgba(255,255,255,0.03);
+    return `
+      <div style="padding:16px; color:#c4cad5; line-height:1.4;">
+        Foundry chat opens in its native popout so rolls, cards, whispers, and chat controls behave normally.
+      </div>
+      <div style="padding:0 16px 16px;">
+        <button type="button" data-companion-open-chat style="
+          width:100%;
+          height:40px;
+          border:1px solid #656d7c;
+          background:#273140;
+          color:#fff;
+          cursor:pointer;
         ">
-          <div style="font-weight:700; color:#fff; margin-bottom:4px;">${speaker}</div>
-          <div style="color:#d8dde8; line-height:1.35;">${content || "&nbsp;"}</div>
-        </article>
-      `;
-    }).join("");
+          <i class="fas fa-comments"></i> Open Chat
+        </button>
+      </div>
+    `;
   }
 
   buildSidePanelHtml() {
-    const panelHtml = this.activePanel === "chat" ? this.buildChatPanelHtml() : this.buildCombatPanelHtml();
+    const panelHtml = this.activePanel === "chat" ? this.buildChatPanelHtml() : this.buildTurnOrderPanelHtml();
 
     return `
       <aside style="
-        width: 420px;
+        width: ${SIDE_PANEL_WIDTH}px;
         min-width: 320px;
         max-width: 42%;
-        height: 720px;
+        height: ${SIDE_PANEL_HEIGHT}px;
         border: 2px solid #555;
         background:#101218;
         color:#e5e8ef;
@@ -403,7 +426,55 @@ export class PlayerDisplay extends Application {
     html.find("[data-companion-panel]").on("click", (event) => {
       this.activePanel = event.currentTarget.dataset.companionPanel;
       this.render(false);
+
+      if (this.activePanel === "chat") {
+        this.openNativeChatPopout();
+      }
     });
+
+    html.find("[data-companion-open-chat]").on("click", () => {
+      this.openNativeChatPopout();
+    });
+
+    html.find("[data-companion-roll-initiative]").on("click", async (event) => {
+      const combatantId = event.currentTarget.dataset.companionRollInitiative;
+      await game.combat?.rollInitiative(combatantId, { updateTurn: true });
+      this.refresh();
+    });
+
+    html.find("[data-companion-roll-all]").on("click", async () => {
+      await game.combat?.rollAll({ updateTurn: true });
+      this.refresh();
+    });
+
+    html.find("[data-companion-roll-npc]").on("click", async () => {
+      await game.combat?.rollNPC({ updateTurn: true });
+      this.refresh();
+    });
+  }
+
+  async openNativeChatPopout() {
+    const chat = ui.sidebar?.tabs?.chat ?? ui.sidebar?.tabs?.get?.("chat") ?? ui.chat;
+    if (!chat?.renderPopout) {
+      ui.sidebar?.activateTab?.("chat");
+      ui.sidebar?.changeTab?.("chat", "primary");
+      return;
+    }
+
+    const popout = await chat.renderPopout();
+    const element = this.element?.[0] ?? this.element;
+    const rect = element?.getBoundingClientRect?.();
+
+    if (rect && popout?.setPosition) {
+      popout.setPosition({
+        left: Math.max(0, rect.right - SIDE_PANEL_WIDTH - 24),
+        top: Math.max(0, rect.top + 86),
+        width: SIDE_PANEL_WIDTH,
+        height: SIDE_PANEL_HEIGHT
+      });
+    }
+
+    popout?.bringToFront?.();
   }
 
   refresh() {

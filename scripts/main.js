@@ -75,6 +75,14 @@ Hooks.on("updateTokenDocument", (tokenDoc, changes) => {
   refreshAllDisplays();
 });
 
+Hooks.on("moveToken", () => {
+  refreshAllDisplays();
+});
+
+Hooks.on("stopToken", () => {
+  refreshAllDisplays();
+});
+
 Hooks.on("refreshToken", (token) => {
   refreshAllDisplays();
 });
