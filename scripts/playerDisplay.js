@@ -6,6 +6,7 @@ const GRID_PIXELS = 72;
 const GRID_COLOR = "#333";
 const TOKEN_SIZE_PLAYER = 64;
 const TOKEN_SIZE_OTHER = 56;
+const PANEL_CHAT_MESSAGE_LIMIT = 20;
 
 export const activeDisplays = {};
 
@@ -19,6 +20,14 @@ function escapeHtml(value) {
   }[character]));
 }
 
+function collectionValues(collection) {
+  if (!collection) return [];
+  if (Array.isArray(collection)) return collection;
+  if (Array.isArray(collection.contents)) return collection.contents;
+  if (typeof collection.values === "function") return Array.from(collection.values());
+  return Array.from(collection);
+}
+
 export class PlayerDisplay extends Application {
   constructor(displayIndex, options = {}) {
     super(options);
@@ -26,6 +35,7 @@ export class PlayerDisplay extends Application {
     this.lastRefreshTime = 0;
     this.refreshDebounceDelay = 50; // ms
     this.pendingRefresh = null;
+    this.activePanel = "combat";
     activeDisplays[displayIndex] = this;
   }
 
@@ -240,6 +250,128 @@ export class PlayerDisplay extends Application {
     `;
   }
 
+  buildPanelButton(panel, iconClass, label) {
+    const isActive = this.activePanel === panel;
+
+    return `
+      <button type="button" data-companion-panel="${panel}" title="${escapeHtml(label)}" style="
+        flex: 1 1 50%;
+        height: 44px;
+        border: 0;
+        border-right: ${panel === "combat" ? "1px solid #555" : "0"};
+        background: ${isActive ? "#3d4656" : "#20242d"};
+        color: ${isActive ? "#ffffff" : "#b8c0cf"};
+        font-size: 18px;
+        cursor: pointer;
+      ">
+        <i class="${iconClass}"></i>
+      </button>
+    `;
+  }
+
+  buildCombatPanelHtml() {
+    const combats = collectionValues(game.combats);
+    if (!combats.length) {
+      return `<div style="padding:14px; color:#aaa;">No combat encounters.</div>`;
+    }
+
+    return combats.map((combat) => {
+      const isCurrent = game.combat?.id === combat.id;
+      const sceneName = escapeHtml(combat.scene?.name ?? "Unknown Scene");
+      const round = escapeHtml(combat.round ?? "-");
+      const turn = escapeHtml((combat.turn ?? 0) + 1);
+      const activeCombatantId = isCurrent ? combat.combatant?.id : null;
+      const combatants = collectionValues(combat.turns ?? combat.combatants);
+
+      const combatantsHtml = combatants.map((combatant) => {
+        const isTurn = activeCombatantId && combatant.id === activeCombatantId;
+        const name = escapeHtml(combatant.name);
+        const initiative = combatant.initiative ?? "-";
+
+        return `
+          <div style="
+            display:flex;
+            align-items:center;
+            gap:8px;
+            padding:8px 10px;
+            background:${isTurn ? "rgba(190, 130, 45, 0.28)" : "rgba(255,255,255,0.04)"};
+            border-bottom:1px solid rgba(255,255,255,0.07);
+          ">
+            <div style="width:28px; color:#c4cad5; text-align:right;">${escapeHtml(initiative)}</div>
+            <div style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${name}</div>
+          </div>
+        `;
+      }).join("");
+
+      return `
+        <section style="border-bottom:1px solid #3a3f49;">
+          <div style="padding:10px 12px; background:#181b22;">
+            <div style="display:flex; justify-content:space-between; gap:8px; color:#fff;">
+              <strong style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${sceneName}</strong>
+              <span style="color:#c4cad5;">R${round} T${turn}</span>
+            </div>
+          </div>
+          ${combatantsHtml || `<div style="padding:10px 12px; color:#aaa;">No combatants.</div>`}
+        </section>
+      `;
+    }).join("");
+  }
+
+  buildChatPanelHtml() {
+    const messages = collectionValues(game.messages).slice(-PANEL_CHAT_MESSAGE_LIMIT).reverse();
+    if (!messages.length) {
+      return `<div style="padding:14px; color:#aaa;">No chat messages.</div>`;
+    }
+
+    return messages.map((message) => {
+      const speaker = escapeHtml(message.speaker?.alias ?? message.user?.name ?? "Unknown");
+      const content = escapeHtml(String(message.content ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
+
+      return `
+        <article style="
+          padding:10px 12px;
+          border-bottom:1px solid rgba(255,255,255,0.08);
+          background:rgba(255,255,255,0.03);
+        ">
+          <div style="font-weight:700; color:#fff; margin-bottom:4px;">${speaker}</div>
+          <div style="color:#d8dde8; line-height:1.35;">${content || "&nbsp;"}</div>
+        </article>
+      `;
+    }).join("");
+  }
+
+  buildSidePanelHtml() {
+    const panelHtml = this.activePanel === "chat" ? this.buildChatPanelHtml() : this.buildCombatPanelHtml();
+
+    return `
+      <aside style="
+        width: 420px;
+        min-width: 320px;
+        max-width: 42%;
+        height: 720px;
+        border: 2px solid #555;
+        background:#101218;
+        color:#e5e8ef;
+        display:flex;
+        flex-direction:column;
+        overflow:hidden;
+      ">
+        <div style="
+          height:44px;
+          display:flex;
+          border-bottom:1px solid #555;
+          background:#20242d;
+        ">
+          ${this.buildPanelButton("combat", "fas fa-swords", "Combat Encounters")}
+          ${this.buildPanelButton("chat", "fas fa-comments", "Chat Messages")}
+        </div>
+        <div style="flex:1; overflow:auto;">
+          ${panelHtml}
+        </div>
+      </aside>
+    `;
+  }
+
   async _renderInner() {
     const data = await this.getData();
     const safeName = escapeHtml(data.name);
@@ -249,9 +381,29 @@ export class PlayerDisplay extends Application {
       <div style="padding:20px; font-size:16px;">
         <h2>Display ${this.displayIndex}: ${safeName}</h2>
         <p>HP: ${safeHp}</p>
-        ${this.buildViewportHtml()}
+        <div style="
+          display:flex;
+          gap:16px;
+          align-items:flex-start;
+          width:100%;
+          overflow:hidden;
+        ">
+          <main style="flex:1 1 auto; min-width:0;">
+            ${this.buildViewportHtml()}
+          </main>
+          ${this.buildSidePanelHtml()}
+        </div>
       </div>
     `;
+  }
+
+  activateListeners(html) {
+    super.activateListeners(html);
+
+    html.find("[data-companion-panel]").on("click", (event) => {
+      this.activePanel = event.currentTarget.dataset.companionPanel;
+      this.render(false);
+    });
   }
 
   refresh() {

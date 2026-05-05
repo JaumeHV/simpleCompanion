@@ -79,6 +79,42 @@ Hooks.on("refreshToken", (token) => {
   refreshAllDisplays();
 });
 
+Hooks.on("createChatMessage", () => {
+  refreshAllDisplays();
+});
+
+Hooks.on("updateChatMessage", () => {
+  refreshAllDisplays();
+});
+
+Hooks.on("deleteChatMessage", () => {
+  refreshAllDisplays();
+});
+
+Hooks.on("createCombat", () => {
+  refreshAllDisplays();
+});
+
+Hooks.on("updateCombat", () => {
+  refreshAllDisplays();
+});
+
+Hooks.on("deleteCombat", () => {
+  refreshAllDisplays();
+});
+
+Hooks.on("createCombatant", () => {
+  refreshAllDisplays();
+});
+
+Hooks.on("updateCombatant", () => {
+  refreshAllDisplays();
+});
+
+Hooks.on("deleteCombatant", () => {
+  refreshAllDisplays();
+});
+
 Hooks.on("getSceneControlButtons", (controls) => {
   const simpleCompanionControl = {
     name: "simple-companion",
