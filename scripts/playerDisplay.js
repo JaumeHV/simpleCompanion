@@ -4,8 +4,7 @@ const MODULE_ID = "simple-companion";
 const VIEWPORT_SIZE = 720;
 const GRID_PIXELS = 72;
 const GRID_COLOR = "#333";
-const TOKEN_SIZE_PLAYER = 64;
-const TOKEN_SIZE_OTHER = 56;
+const TOKEN_FOOTPRINT_PADDING = 4;
 const SIDE_PANEL_WIDTH = 420;
 const SIDE_PANEL_HEIGHT = 720;
 const TOKEN_RING_COLORS = {
@@ -53,6 +52,16 @@ function getTokenRingColor(token) {
   if (disposition < 0) return TOKEN_RING_COLORS.hostile;
   if (disposition > 0) return TOKEN_RING_COLORS.friendly;
   return TOKEN_RING_COLORS.neutral;
+}
+
+function getTokenFootprint(token) {
+  const width = Number(token.document?.width ?? 1);
+  const height = Number(token.document?.height ?? 1);
+
+  return {
+    width: Math.max(width, 0.25) * GRID_PIXELS,
+    height: Math.max(height, 0.25) * GRID_PIXELS
+  };
 }
 
 const COMPANION_BUTTON_SELECTOR = [
@@ -178,8 +187,9 @@ export class PlayerDisplay extends Application {
     let tokensHtml = "";
 
     // Player token
-    tokensHtml += this.buildTokenHtml(centerX, centerY, TOKEN_SIZE_PLAYER, token);
-    tokensHtml += this.buildLabelHtml(centerX, centerY, TOKEN_SIZE_PLAYER, token.name);
+    const tokenFootprint = getTokenFootprint(token);
+    tokensHtml += this.buildTokenHtml(centerX, centerY, token, tokenFootprint);
+    tokensHtml += this.buildLabelHtml(centerX, centerY, tokenFootprint, token.name);
 
     // Other tokens
     for (const otherToken of canvas.tokens.placeables) {
@@ -197,8 +207,9 @@ export class PlayerDisplay extends Application {
 
       if (screenX < -50 || screenX > VIEWPORT_SIZE + 50 || screenY < -50 || screenY > VIEWPORT_SIZE + 50) continue;
 
-      tokensHtml += this.buildTokenHtml(screenX, screenY, TOKEN_SIZE_OTHER, otherToken);
-      tokensHtml += this.buildLabelHtml(screenX, screenY, TOKEN_SIZE_OTHER, otherToken.name);
+      const otherFootprint = getTokenFootprint(otherToken);
+      tokensHtml += this.buildTokenHtml(screenX, screenY, otherToken, otherFootprint);
+      tokensHtml += this.buildLabelHtml(screenX, screenY, otherFootprint, otherToken.name);
     }
 
     return `
@@ -231,14 +242,14 @@ export class PlayerDisplay extends Application {
     `;
   }
 
-  buildLabelHtml(x, y, size, name) {
+  buildLabelHtml(x, y, footprint, name) {
     const safeName = escapeHtml(name);
 
     return `
       <div style="
         position: absolute;
         left: ${x}px;
-        top: ${y + size / 2 + 2}px;
+        top: ${y + footprint.height / 2 + 2}px;
         transform: translateX(-50%);
         font-size: 10px;
         color: white;
@@ -254,22 +265,24 @@ export class PlayerDisplay extends Application {
     `;
   }
 
-  buildTokenHtml(x, y, size, token) {
+  buildTokenHtml(x, y, token, footprint) {
     const img = escapeHtml(token.document.texture?.src);
     const tokenName = escapeHtml(token.name);
     const ringColor = getTokenRingColor(token);
+    const imageInset = Math.min(TOKEN_FOOTPRINT_PADDING, footprint.width / 6, footprint.height / 6);
+    const borderRadius = Math.min(10, footprint.width / 4, footprint.height / 4);
 
     if (img) {
       return `
         <div title="${tokenName}" style="
           position: absolute;
-          left: ${x - size / 2}px;
-          top: ${y - size / 2}px;
-          width: ${size}px;
-          height: ${size}px;
-          border-radius: 50%;
+          left: ${x - footprint.width / 2}px;
+          top: ${y - footprint.height / 2}px;
+          width: ${footprint.width}px;
+          height: ${footprint.height}px;
+          border-radius: ${borderRadius}px;
           border: 2px solid ${ringColor};
-          padding: 4px;
+          padding: ${imageInset}px;
           overflow: hidden;
           z-index: 10;
           background: ${ringColor};
@@ -279,7 +292,7 @@ export class PlayerDisplay extends Application {
             width: 100%;
             height: 100%;
             object-fit: cover;
-            border-radius: 50%;
+            border-radius: ${Math.max(0, borderRadius - imageInset)}px;
           ">
         </div>
       `;
@@ -288,12 +301,12 @@ export class PlayerDisplay extends Application {
     return `
       <div title="${tokenName}" style="
         position: absolute;
-        left: ${x - size / 2}px;
-        top: ${y - size / 2}px;
-        width: ${size}px;
-        height: ${size}px;
+        left: ${x - footprint.width / 2}px;
+        top: ${y - footprint.height / 2}px;
+        width: ${footprint.width}px;
+        height: ${footprint.height}px;
         background: ${ringColor};
-        border-radius: 50%;
+        border-radius: ${borderRadius}px;
         border: 2px solid ${ringColor};
         z-index: 10;
       "></div>
