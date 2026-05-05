@@ -12,8 +12,11 @@ const TOKEN_RING_COLORS = {
   friendly: "#317a33",
   neutral: "#818386"
 };
+const BLOCKED_TEMPLATE_PLACEMENT_EVENTS = ["pointerdown", "pointerup", "mousedown", "mouseup", "click"];
 
 export const activeDisplays = {};
+
+let canvasTemplatePlacementGuardInstalled = false;
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (character) => ({
@@ -80,6 +83,33 @@ function getActiveTemplatePreview() {
     const documentName = child.document?.documentName ?? child.document?.constructor?.documentName;
     return documentName === "MeasuredTemplate";
   }) ?? null;
+}
+
+function hasActiveDisplay() {
+  return Object.keys(activeDisplays).length > 0;
+}
+
+function isPrimaryPointerEvent(event) {
+  return event.button === undefined || event.button === 0;
+}
+
+function blockMainCanvasTemplatePlacement(event) {
+  if (!hasActiveDisplay() || !getActiveTemplatePreview() || !isPrimaryPointerEvent(event)) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation?.();
+}
+
+function installCanvasTemplatePlacementGuard() {
+  const canvasElement = canvas?.app?.view;
+  if (canvasTemplatePlacementGuardInstalled || !canvasElement) return;
+
+  for (const eventName of BLOCKED_TEMPLATE_PLACEMENT_EVENTS) {
+    canvasElement.addEventListener(eventName, blockMainCanvasTemplatePlacement, true);
+  }
+
+  canvasTemplatePlacementGuardInstalled = true;
 }
 
 const COMPANION_BUTTON_SELECTOR = [
@@ -504,6 +534,8 @@ export class PlayerDisplay extends Application {
     const element = getHtmlElement(html);
     const viewport = element?.querySelector?.(`#simple-companion-viewport-${this.displayIndex}`);
     viewport?.addEventListener?.("click", (event) => this.handleViewportClick(event));
+    viewport?.addEventListener?.("pointermove", (event) => this.handleViewportPointerMove(event));
+    installCanvasTemplatePlacementGuard();
 
     element?.addEventListener?.("click", (event) => {
       const target = event.target?.closest?.(COMPANION_BUTTON_SELECTOR);
@@ -540,15 +572,9 @@ export class PlayerDisplay extends Application {
     }
   }
 
-  async handleViewportClick(event) {
-    const preview = getActiveTemplatePreview();
-    if (!preview?.document?.toObject) return;
-
+  getViewportScenePoint(event) {
     const token = this.getToken();
-    if (!token || !canvas.scene) return;
-
-    event.preventDefault();
-    event.stopPropagation();
+    if (!token || !canvas.scene) return null;
 
     const viewport = event.currentTarget;
     const rect = viewport.getBoundingClientRect();
@@ -562,9 +588,42 @@ export class PlayerDisplay extends Application {
       y: tokenCanvasCenter.y + ((viewportY - VIEWPORT_SIZE / 2) / GRID_PIXELS) * gridSize
     };
 
-    const snappedPoint = canvas.templates.getSnappedPoint?.(scenePoint)
+    return canvas.templates.getSnappedPoint?.(scenePoint)
       ?? canvas.grid.getSnappedPoint?.(scenePoint)
       ?? scenePoint;
+  }
+
+  syncTemplatePreviewToViewport(event) {
+    const preview = getActiveTemplatePreview();
+    if (!preview?.document?.updateSource) return null;
+
+    const snappedPoint = this.getViewportScenePoint(event);
+    if (!snappedPoint) return null;
+
+    preview.document.updateSource({
+      x: snappedPoint.x,
+      y: snappedPoint.y
+    });
+    preview.refresh?.();
+    preview.renderFlags?.set?.({ refresh: true });
+    preview.position?.set?.(snappedPoint.x, snappedPoint.y);
+
+    return { preview, snappedPoint };
+  }
+
+  handleViewportPointerMove(event) {
+    this.syncTemplatePreviewToViewport(event);
+  }
+
+  async handleViewportClick(event) {
+    const previewState = this.syncTemplatePreviewToViewport(event);
+    const preview = previewState?.preview ?? getActiveTemplatePreview();
+    if (!preview?.document?.toObject) return;
+    const snappedPoint = previewState?.snappedPoint ?? this.getViewportScenePoint(event);
+    if (!snappedPoint || !canvas.scene) return;
+
+    event.preventDefault();
+    event.stopPropagation();
 
     const templateData = preview.document.toObject();
     delete templateData._id;
