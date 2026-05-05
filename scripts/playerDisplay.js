@@ -13,10 +13,26 @@ const TOKEN_RING_COLORS = {
   neutral: "#818386"
 };
 const BLOCKED_TEMPLATE_PLACEMENT_EVENTS = ["pointerdown", "pointerup", "mousedown", "mouseup", "click"];
+const BLOCKED_TEMPLATE_LAYER_METHODS = [
+  "_onClickLeft",
+  "_onDragLeftStart",
+  "_onDragLeftMove",
+  "_onDragLeftDrop",
+  "_onUnclickLeft"
+];
+const BLOCKED_TEMPLATE_PREVIEW_METHODS = [
+  "_onClickLeft",
+  "_onDragLeftStart",
+  "_onDragLeftMove",
+  "_onDragLeftDrop",
+  "_onUnclickLeft"
+];
 
 export const activeDisplays = {};
 
 let canvasTemplatePlacementGuardInstalled = false;
+let measuredTemplatePreviewGuardInstalled = false;
+const patchedTemplateLayers = new WeakSet();
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (character) => ({
@@ -79,9 +95,15 @@ function getTokenCanvasCenter(token, gridSize) {
 
 function getActiveTemplatePreview() {
   const previewChildren = Array.from(canvas.templates?.preview?.children ?? []);
-  return previewChildren.find((child) => {
+  const previewCandidates = [
+    ...previewChildren,
+    canvas.templates?._preview,
+    canvas.templates?.hover
+  ].filter(Boolean);
+
+  return previewCandidates.find((child) => {
     const documentName = child.document?.documentName ?? child.document?.constructor?.documentName;
-    return documentName === "MeasuredTemplate";
+    return child.isPreview !== false && documentName === "MeasuredTemplate";
   }) ?? null;
 }
 
@@ -110,6 +132,50 @@ function installCanvasTemplatePlacementGuard() {
   }
 
   canvasTemplatePlacementGuardInstalled = true;
+}
+
+function installTemplateLayerPlacementGuard() {
+  const templateLayer = canvas?.templates;
+  if (!templateLayer || patchedTemplateLayers.has(templateLayer)) return;
+
+  for (const methodName of BLOCKED_TEMPLATE_LAYER_METHODS) {
+    const originalMethod = templateLayer[methodName];
+    if (typeof originalMethod !== "function") continue;
+
+    templateLayer[methodName] = function simpleCompanionTemplatePlacementGuard(event, ...args) {
+      if (hasActiveDisplay() && getActiveTemplatePreview()) {
+        event?.preventDefault?.();
+        event?.stopPropagation?.();
+        return false;
+      }
+
+      return originalMethod.call(this, event, ...args);
+    };
+  }
+
+  patchedTemplateLayers.add(templateLayer);
+}
+
+function installMeasuredTemplatePreviewGuard() {
+  const prototype = globalThis.CONFIG?.MeasuredTemplate?.objectClass?.prototype;
+  if (measuredTemplatePreviewGuardInstalled || !prototype) return;
+
+  for (const methodName of BLOCKED_TEMPLATE_PREVIEW_METHODS) {
+    const originalMethod = prototype[methodName];
+    if (typeof originalMethod !== "function") continue;
+
+    prototype[methodName] = function simpleCompanionTemplatePreviewGuard(event, ...args) {
+      if (hasActiveDisplay() && this.isPreview && getActiveTemplatePreview()) {
+        event?.preventDefault?.();
+        event?.stopPropagation?.();
+        return false;
+      }
+
+      return originalMethod.call(this, event, ...args);
+    };
+  }
+
+  measuredTemplatePreviewGuardInstalled = true;
 }
 
 const COMPANION_BUTTON_SELECTOR = [
@@ -534,8 +600,11 @@ export class PlayerDisplay extends Application {
     const element = getHtmlElement(html);
     const viewport = element?.querySelector?.(`#simple-companion-viewport-${this.displayIndex}`);
     viewport?.addEventListener?.("click", (event) => this.handleViewportClick(event));
+    viewport?.addEventListener?.("pointerdown", (event) => this.handleViewportPointerDown(event));
     viewport?.addEventListener?.("pointermove", (event) => this.handleViewportPointerMove(event));
     installCanvasTemplatePlacementGuard();
+    installTemplateLayerPlacementGuard();
+    installMeasuredTemplatePreviewGuard();
 
     element?.addEventListener?.("click", (event) => {
       const target = event.target?.closest?.(COMPANION_BUTTON_SELECTOR);
@@ -613,6 +682,11 @@ export class PlayerDisplay extends Application {
 
   handleViewportPointerMove(event) {
     this.syncTemplatePreviewToViewport(event);
+  }
+
+  async handleViewportPointerDown(event) {
+    if (!isPrimaryPointerEvent(event)) return;
+    await this.handleViewportClick(event);
   }
 
   async handleViewportClick(event) {
