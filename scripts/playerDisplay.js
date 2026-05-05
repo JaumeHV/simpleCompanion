@@ -59,8 +59,6 @@ const COMPANION_BUTTON_SELECTOR = [
   "[data-companion-panel]",
   "[data-companion-open-chat]",
   "[data-companion-roll-initiative]",
-  "[data-companion-roll-all]",
-  "[data-companion-roll-npc]",
   "[data-companion-end-turn]"
 ].join(", ");
 
@@ -94,6 +92,23 @@ export class PlayerDisplay extends Application {
   getActor() {
     const actorId = game.settings.get(MODULE_ID, `player${this.displayIndex}ActorId`);
     return game.actors.get(actorId);
+  }
+
+  getAssignedActorId() {
+    return game.settings.get(MODULE_ID, `player${this.displayIndex}ActorId`);
+  }
+
+  isAssignedCombatant(combatant) {
+    const actorId = this.getAssignedActorId();
+    if (!actorId || !combatant) return false;
+
+    return combatant.actor?.id === actorId
+      || combatant.actorId === actorId
+      || combatant.token?.actor?.id === actorId;
+  }
+
+  isAssignedActorTurn() {
+    return this.isAssignedCombatant(game.combat?.combatant);
   }
 
   getToken() {
@@ -319,9 +334,10 @@ export class PlayerDisplay extends Application {
 
     const combatantsHtml = combatants.map((combatant) => {
       const isTurn = activeCombatantId && combatant.id === activeCombatantId;
+      const isAssigned = this.isAssignedCombatant(combatant);
       const name = escapeHtml(combatant.name);
       const initiative = combatant.initiative ?? "-";
-      const initiativeHtml = combatant.initiative == null && canRoll
+      const initiativeHtml = combatant.initiative == null && canRoll && isAssigned
         ? `<button type="button" data-companion-roll-initiative="${combatant.id}" title="Roll Initiative" style="
             width:34px;
             height:28px;
@@ -350,19 +366,6 @@ export class PlayerDisplay extends Application {
       `;
     }).join("");
 
-    const rollActionsHtml = canRoll
-      ? `
-        <div style="display:flex; gap:8px; padding:10px 12px; border-bottom:1px solid #3a3f49;">
-          <button type="button" data-companion-roll-all style="flex:1; height:34px; border:1px solid #656d7c; background:#273140; color:#fff; cursor:pointer;">
-            <i class="fas fa-dice-d20"></i> Roll All
-          </button>
-          <button type="button" data-companion-roll-npc style="flex:1; height:34px; border:1px solid #656d7c; background:#273140; color:#fff; cursor:pointer;">
-            <i class="fas fa-users"></i> Roll NPCs
-          </button>
-        </div>
-      `
-      : "";
-
     return `
       <section>
         <div style="padding:10px 12px; background:#181b22; border-bottom:1px solid #3a3f49;">
@@ -371,7 +374,6 @@ export class PlayerDisplay extends Application {
             <span style="color:#c4cad5;">Round ${round} | Turn ${turn}</span>
           </div>
         </div>
-        ${rollActionsHtml}
         ${combatantsHtml || `<div style="padding:10px 12px; color:#aaa;">No combatants.</div>`}
       </section>
     `;
@@ -399,6 +401,7 @@ export class PlayerDisplay extends Application {
 
   buildSidePanelHtml() {
     const panelHtml = this.activePanel === "chat" ? this.buildChatPanelHtml() : this.buildTurnOrderPanelHtml();
+    const canEndTurn = this.isAssignedActorTurn();
 
     return `
       <aside style="
@@ -426,13 +429,13 @@ export class PlayerDisplay extends Application {
           ${panelHtml}
         </div>
         <div style="padding:10px 12px; border-top:1px solid #555; background:#181b22;">
-          <button type="button" data-companion-end-turn style="
+          <button type="button" data-companion-end-turn ${canEndTurn ? "" : "disabled"} title="${canEndTurn ? "End Turn" : "Only available on this character's turn"}" style="
             width:100%;
             height:42px;
             border:1px solid #656d7c;
-            background:#273140;
-            color:#fff;
-            cursor:pointer;
+            background:${canEndTurn ? "#273140" : "#20242d"};
+            color:${canEndTurn ? "#fff" : "#7f8796"};
+            cursor:${canEndTurn ? "pointer" : "not-allowed"};
             font-weight:700;
           ">
             <i class="fas fa-forward"></i> End Turn
@@ -493,15 +496,14 @@ export class PlayerDisplay extends Application {
     } else if (target.dataset.companionOpenChat !== undefined) {
       await this.openNativeChatPopout();
     } else if (target.dataset.companionRollInitiative) {
+      const combatant = game.combat?.combatants?.get?.(target.dataset.companionRollInitiative);
+      if (!this.isAssignedCombatant(combatant)) return;
+
       await game.combat?.rollInitiative(target.dataset.companionRollInitiative, { updateTurn: true });
       this.refresh();
-    } else if (target.dataset.companionRollAll !== undefined) {
-      await game.combat?.rollAll({ updateTurn: true });
-      this.refresh();
-    } else if (target.dataset.companionRollNpc !== undefined) {
-      await game.combat?.rollNPC({ updateTurn: true });
-      this.refresh();
     } else if (target.dataset.companionEndTurn !== undefined) {
+      if (!this.isAssignedActorTurn()) return;
+
       await game.combat?.nextTurn();
       this.refresh();
     }
