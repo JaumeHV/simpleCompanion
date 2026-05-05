@@ -8,6 +8,11 @@ const TOKEN_SIZE_PLAYER = 64;
 const TOKEN_SIZE_OTHER = 56;
 const SIDE_PANEL_WIDTH = 420;
 const SIDE_PANEL_HEIGHT = 720;
+const TOKEN_RING_COLORS = {
+  hostile: "#9e3834",
+  friendly: "#317a33",
+  neutral: "#818386"
+};
 
 export const activeDisplays = {};
 
@@ -37,6 +42,17 @@ function getSceneNameForCombat(combat) {
 
 function getHtmlElement(html) {
   return html?.[0] ?? html;
+}
+
+function isTokenHidden(token) {
+  return Boolean(token.document?.hidden ?? token.hidden);
+}
+
+function getTokenRingColor(token) {
+  const disposition = token.document?.disposition ?? token.disposition;
+  if (disposition < 0) return TOKEN_RING_COLORS.hostile;
+  if (disposition > 0) return TOKEN_RING_COLORS.friendly;
+  return TOKEN_RING_COLORS.neutral;
 }
 
 const COMPANION_BUTTON_SELECTOR = [
@@ -84,7 +100,7 @@ export class PlayerDisplay extends Application {
     const actor = this.getActor();
     if (!actor) return null;
 
-    const tokens = actor.getActiveTokens();
+    const tokens = actor.getActiveTokens().filter((token) => !isTokenHidden(token));
     return tokens.length ? tokens[0] : null;
   }
 
@@ -153,6 +169,7 @@ export class PlayerDisplay extends Application {
     // Other tokens
     for (const otherToken of canvas.tokens.placeables) {
       if (otherToken.id === token.id) continue;
+      if (isTokenHidden(otherToken)) continue;
 
       const otherCenterX = otherToken.x + gridSize / 2;
       const otherCenterY = otherToken.y + gridSize / 2;
@@ -225,6 +242,7 @@ export class PlayerDisplay extends Application {
   buildTokenHtml(x, y, size, token) {
     const img = escapeHtml(token.document.texture?.src);
     const tokenName = escapeHtml(token.name);
+    const ringColor = getTokenRingColor(token);
 
     if (img) {
       return `
@@ -235,21 +253,22 @@ export class PlayerDisplay extends Application {
           width: ${size}px;
           height: ${size}px;
           border-radius: 50%;
-          border: 2px solid white;
+          border: 2px solid ${ringColor};
+          padding: 4px;
           overflow: hidden;
           z-index: 10;
-          background: #222;
+          background: ${ringColor};
+          box-sizing: border-box;
         ">
           <img src="${img}" style="
             width: 100%;
             height: 100%;
             object-fit: cover;
+            border-radius: 50%;
           ">
         </div>
       `;
     }
-
-    const color = token.document.disposition < 0 ? "#ff5555" : "#55ff88";
 
     return `
       <div title="${tokenName}" style="
@@ -258,9 +277,9 @@ export class PlayerDisplay extends Application {
         top: ${y - size / 2}px;
         width: ${size}px;
         height: ${size}px;
-        background: ${color};
+        background: ${ringColor};
         border-radius: 50%;
-        border: 2px solid white;
+        border: 2px solid ${ringColor};
         z-index: 10;
       "></div>
     `;

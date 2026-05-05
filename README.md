@@ -18,10 +18,11 @@ enhance inperson play where interaction with a main screen is not viable.
 ## LICENSE
 As I (the Author) created this module for a very specific purpose and 
 have no plans to maintain or extend its functionality outside of this 
-use case, I am distributing it the Unlicense License as I believe it 
-may be useful for others and could be a fun module to play around with.
+use case, it is distributed under the Unlicense License as I believe it
+may be useful for others and it's not that hard to replicate anyway.
 
-The author encourages any interested parties to modify it as they wish. 
+The author encourages any interested parties to modify it as they wish.
+
 This is free and unencumbered software released into the public domain.
 
 Anyone is free to copy, modify, publish, use, compile, sell, or
@@ -32,8 +33,7 @@ means.
 In jurisdictions that recognize copyright laws, the author or authors
 of this software dedicate any and all copyright interest in the
 software to the public domain. We make this dedication for the benefit
-of the public at large and to the detriment of our heirs and
-successors. We intend this dedication to be an overt act of
+of the public at large. We intend this dedication to be an overt act of
 relinquishment in perpetuity of all present and future rights to this
 software under copyright law.
 
@@ -45,4 +45,4 @@ OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
 
-For more information, please refer to <http://unlicense.org>
+Have fun fellow nerds.
