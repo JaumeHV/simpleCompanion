@@ -1,13 +1,23 @@
 const MODULE_ID = "simple-companion";
 
 // Viewport constants
-const VIEWPORT_SIZE = 360;
-const GRID_PIXELS = 36;
+const VIEWPORT_SIZE = 720;
+const GRID_PIXELS = 72;
 const GRID_COLOR = "#333";
-const TOKEN_SIZE_PLAYER = 32;
-const TOKEN_SIZE_OTHER = 28;
+const TOKEN_SIZE_PLAYER = 64;
+const TOKEN_SIZE_OTHER = 56;
 
 export const activeDisplays = {};
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#39;"
+  }[character]));
+}
 
 export class PlayerDisplay extends Application {
   constructor(displayIndex, options = {}) {
@@ -29,6 +39,10 @@ export class PlayerDisplay extends Application {
       resizable: true,
       title: "Player Display"
     });
+  }
+
+  get id() {
+    return `simple-companion-display-${this.displayIndex}`;
   }
 
   getActor() {
@@ -130,14 +144,15 @@ export class PlayerDisplay extends Application {
         Local tactical viewport — 1 square = 5 ft
       </div>
 
-      <div id="simple-companion-viewport" style="
+      <div style="
         position: relative;
         width: ${VIEWPORT_SIZE}px;
         height: ${VIEWPORT_SIZE}px;
+        max-width: 100%;
         background: #0a0a0a;
         border: 2px solid #777;
         overflow: hidden;
-      ">
+      " id="simple-companion-viewport-${this.displayIndex}">
         ${grid}
         ${tokensHtml}
 
@@ -159,6 +174,8 @@ export class PlayerDisplay extends Application {
   }
 
   buildLabelHtml(x, y, size, name) {
+    const safeName = escapeHtml(name);
+
     return `
       <div style="
         position: absolute;
@@ -174,17 +191,18 @@ export class PlayerDisplay extends Application {
         pointer-events: none;
         z-index: 20;
       ">
-        ${name}
+        ${safeName}
       </div>
     `;
   }
 
   buildTokenHtml(x, y, size, token) {
-    const img = token.document.texture?.src;
+    const img = escapeHtml(token.document.texture?.src);
+    const tokenName = escapeHtml(token.name);
 
     if (img) {
       return `
-        <div title="${token.name}" style="
+        <div title="${tokenName}" style="
           position: absolute;
           left: ${x - size / 2}px;
           top: ${y - size / 2}px;
@@ -208,7 +226,7 @@ export class PlayerDisplay extends Application {
     const color = token.document.disposition < 0 ? "#ff5555" : "#55ff88";
 
     return `
-      <div title="${token.name}" style="
+      <div title="${tokenName}" style="
         position: absolute;
         left: ${x - size / 2}px;
         top: ${y - size / 2}px;
@@ -224,11 +242,13 @@ export class PlayerDisplay extends Application {
 
   async _renderInner() {
     const data = await this.getData();
+    const safeName = escapeHtml(data.name);
+    const safeHp = escapeHtml(data.hp);
 
     return `
       <div style="padding:20px; font-size:16px;">
-        <h2>Display ${this.displayIndex}: ${data.name}</h2>
-        <p>HP: ${data.hp}</p>
+        <h2>Display ${this.displayIndex}: ${safeName}</h2>
+        <p>HP: ${safeHp}</p>
         ${this.buildViewportHtml()}
       </div>
     `;
@@ -258,11 +278,11 @@ export class PlayerDisplay extends Application {
     }
   }
 
-  close() {
+  close(options) {
     if (this.pendingRefresh) {
       clearTimeout(this.pendingRefresh);
     }
     delete activeDisplays[this.displayIndex];
-    return super.close();
+    return super.close(options);
   }
 }

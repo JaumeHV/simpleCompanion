@@ -3,6 +3,56 @@ import { PlayerDisplay, activeDisplays } from "./playerDisplay.js";
 
 const MODULE_ID = "simple-companion";
 
+function isDebugMode() {
+  return game.settings.get(MODULE_ID, "debugMode");
+}
+
+function refreshAllDisplays() {
+  for (const display of Object.values(activeDisplays)) {
+    display.refresh();
+  }
+}
+
+function refreshDisplaysForActor(actorId) {
+  if (!actorId) return;
+
+  for (let i = 1; i <= 4; i++) {
+    const display = activeDisplays[i];
+    if (!display) continue;
+
+    const displayActorId = game.settings.get(MODULE_ID, `player${i}ActorId`);
+    if (displayActorId === actorId) {
+      display.refresh();
+    }
+  }
+}
+
+function openDisplay(displayIndex) {
+  const existingDisplay = activeDisplays[displayIndex];
+  if (existingDisplay) return existingDisplay.render(true);
+
+  return new PlayerDisplay(displayIndex).render(true);
+}
+
+function buildDisplayTool(displayIndex) {
+  return {
+    name: `open-display-${displayIndex}`,
+    title: `Open Display ${displayIndex}`,
+    icon: "fas fa-tv",
+    order: displayIndex,
+    button: true,
+    onChange: () => openDisplay(displayIndex),
+    onClick: () => openDisplay(displayIndex)
+  };
+}
+
+function buildDisplayTools() {
+  return Object.fromEntries([1, 2, 3, 4].map((displayIndex) => {
+    const tool = buildDisplayTool(displayIndex);
+    return [tool.name, tool];
+  }));
+}
+
 Hooks.once("init", () => {
   console.log(`${MODULE_ID} | Initialising`);
   registerSettings();
@@ -13,80 +63,36 @@ Hooks.once("ready", () => {
   ui.notifications.info("Simple Companion loaded.");
 
   Hooks.on("updateActor", (actor) => {
-    for (let i = 1; i <= 4; i++) {
-      const display = activeDisplays[i];
-      if (!display) continue;
-
-      const actorId = game.settings.get(MODULE_ID, `player${i}ActorId`);
-      if (actorId === actor.id) {
-        display.refresh();
-      }
-    }
+    refreshDisplaysForActor(actor.id);
   });
 });
 
 Hooks.on("updateTokenDocument", (tokenDoc, changes) => {
-  console.log("Token document updated", tokenDoc.name, changes);
-
-  for (let i = 1; i <= 4; i++) {
-    const display = activeDisplays[i];
-    if (!display) continue;
-
-    const actorId = game.settings.get(MODULE_ID, `player${i}ActorId`);
-    if (tokenDoc.actor?.id === actorId) {
-      display.refresh();
-    }
+  if (isDebugMode()) {
+    console.log("Token document updated", tokenDoc.name, changes);
   }
+
+  refreshAllDisplays();
 });
 
 Hooks.on("refreshToken", (token) => {
-  for (let i = 1; i <= 4; i++) {
-    const display = activeDisplays[i];
-    if (!display) continue;
-
-    const actorId = game.settings.get(MODULE_ID, `player${i}ActorId`);
-    if (token.actor?.id === actorId) {
-      display.refresh();
-    }
-  }
+  refreshAllDisplays();
 });
 
 Hooks.on("getSceneControlButtons", (controls) => {
-  controls["simple-companion"] = {
+  const simpleCompanionControl = {
     name: "simple-companion",
     title: "Simple Companion",
     icon: "fas fa-tablet-alt",
     layer: "tokens",
     order: 99,
-    tools: {
-      "open-display-1": {
-        name: "open-display-1",
-        title: "Open Display 1",
-        icon: "fas fa-tv",
-        button: true,
-        onClick: () => new PlayerDisplay(1).render(true)
-      },
-      "open-display-2": {
-        name: "open-display-2",
-        title: "Open Display 2",
-        icon: "fas fa-tv",
-        button: true,
-        onClick: () => new PlayerDisplay(2).render(true)
-      },
-      "open-display-3": {
-        name: "open-display-3",
-        title: "Open Display 3",
-        icon: "fas fa-tv",
-        button: true,
-        onClick: () => new PlayerDisplay(3).render(true)
-      },
-      "open-display-4": {
-        name: "open-display-4",
-        title: "Open Display 4",
-        icon: "fas fa-tv",
-        button: true,
-        onClick: () => new PlayerDisplay(4).render(true)
-      }
-    }
+    activeTool: "open-display-1",
+    tools: buildDisplayTools()
   };
+
+  if (Array.isArray(controls)) {
+    controls.push(simpleCompanionControl);
+  } else {
+    controls["simple-companion"] = simpleCompanionControl;
+  }
 });
