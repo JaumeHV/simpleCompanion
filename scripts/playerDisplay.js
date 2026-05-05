@@ -390,7 +390,7 @@ export class PlayerDisplay extends Application {
         display:flex;
         flex-direction:column;
         overflow:hidden;
-      ">
+      " id="simple-companion-side-panel-${this.displayIndex}">
         <div style="
           height:44px;
           display:flex;
@@ -400,7 +400,7 @@ export class PlayerDisplay extends Application {
           ${this.buildPanelButton("combat", "fas fa-swords", "Combat Encounters")}
           ${this.buildPanelButton("chat", "fas fa-comments", "Chat Messages")}
         </div>
-        <div style="flex:1; overflow:auto;">
+        <div style="flex:1; overflow:auto;" id="simple-companion-side-panel-body-${this.displayIndex}">
           ${panelHtml}
         </div>
       </aside>
@@ -485,14 +485,15 @@ export class PlayerDisplay extends Application {
 
     const popout = await chat.renderPopout();
     const element = getHtmlElement(this.element);
-    const rect = element?.getBoundingClientRect?.();
+    const panelBody = element?.querySelector?.(`#simple-companion-side-panel-body-${this.displayIndex}`);
+    const rect = panelBody?.getBoundingClientRect?.();
 
     if (rect && popout?.setPosition) {
       popout.setPosition({
-        left: Math.max(0, rect.right - SIDE_PANEL_WIDTH - 24),
-        top: Math.max(0, rect.top + 86),
-        width: SIDE_PANEL_WIDTH,
-        height: SIDE_PANEL_HEIGHT
+        left: Math.max(0, rect.left),
+        top: Math.max(0, rect.top),
+        width: rect.width,
+        height: rect.height
       });
     }
 
