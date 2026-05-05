@@ -33,6 +33,14 @@ function getHtmlElement(html) {
   return html?.[0] ?? html;
 }
 
+const COMPANION_BUTTON_SELECTOR = [
+  "[data-companion-panel]",
+  "[data-companion-open-chat]",
+  "[data-companion-roll-initiative]",
+  "[data-companion-roll-all]",
+  "[data-companion-roll-npc]"
+].join(", ");
+
 export class PlayerDisplay extends Application {
   constructor(displayIndex, options = {}) {
     super(options);
@@ -426,37 +434,45 @@ export class PlayerDisplay extends Application {
 
   activateListeners(html) {
     super.activateListeners(html);
+
+    if (typeof html?.find === "function") {
+      html.find(COMPANION_BUTTON_SELECTOR).off("click.simpleCompanion").on("click.simpleCompanion", (event) => {
+        this.handleCompanionButtonClick(event, event.currentTarget);
+      });
+    }
+
     const element = getHtmlElement(html);
-    if (!element?.addEventListener) return;
-
-    element.addEventListener("click", async (event) => {
-      const target = event.target?.closest?.(
-        "[data-companion-panel], [data-companion-open-chat], [data-companion-roll-initiative], [data-companion-roll-all], [data-companion-roll-npc]"
-      );
-      if (!target) return;
-
-      event.preventDefault();
-
-      if (target.dataset.companionPanel) {
-        this.activePanel = target.dataset.companionPanel;
-        this.render(false);
-
-        if (this.activePanel === "chat") {
-          await this.openNativeChatPopout();
-        }
-      } else if (target.dataset.companionOpenChat !== undefined) {
-        await this.openNativeChatPopout();
-      } else if (target.dataset.companionRollInitiative) {
-        await game.combat?.rollInitiative(target.dataset.companionRollInitiative, { updateTurn: true });
-        this.refresh();
-      } else if (target.dataset.companionRollAll !== undefined) {
-        await game.combat?.rollAll({ updateTurn: true });
-        this.refresh();
-      } else if (target.dataset.companionRollNpc !== undefined) {
-        await game.combat?.rollNPC({ updateTurn: true });
-        this.refresh();
+    element?.addEventListener?.("click", (event) => {
+      const target = event.target?.closest?.(COMPANION_BUTTON_SELECTOR);
+      if (target && element.contains?.(target)) {
+        this.handleCompanionButtonClick(event, target);
       }
     });
+  }
+
+  async handleCompanionButtonClick(event, target) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (target.dataset.companionPanel) {
+      this.activePanel = target.dataset.companionPanel;
+      this.render(false);
+
+      if (this.activePanel === "chat") {
+        await this.openNativeChatPopout();
+      }
+    } else if (target.dataset.companionOpenChat !== undefined) {
+      await this.openNativeChatPopout();
+    } else if (target.dataset.companionRollInitiative) {
+      await game.combat?.rollInitiative(target.dataset.companionRollInitiative, { updateTurn: true });
+      this.refresh();
+    } else if (target.dataset.companionRollAll !== undefined) {
+      await game.combat?.rollAll({ updateTurn: true });
+      this.refresh();
+    } else if (target.dataset.companionRollNpc !== undefined) {
+      await game.combat?.rollNPC({ updateTurn: true });
+      this.refresh();
+    }
   }
 
   async openNativeChatPopout() {
