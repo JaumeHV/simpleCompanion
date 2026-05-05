@@ -29,6 +29,12 @@ function collectionValues(collection) {
   return Array.from(collection);
 }
 
+function getSceneNameForCombat(combat) {
+  return combat.scene?.name
+    ?? game.scenes?.get(combat.sceneId)?.name
+    ?? "Unknown Scene";
+}
+
 function getHtmlElement(html) {
   return html?.[0] ?? html;
 }
@@ -38,7 +44,8 @@ const COMPANION_BUTTON_SELECTOR = [
   "[data-companion-open-chat]",
   "[data-companion-roll-initiative]",
   "[data-companion-roll-all]",
-  "[data-companion-roll-npc]"
+  "[data-companion-roll-npc]",
+  "[data-companion-end-turn]"
 ].join(", ");
 
 export class PlayerDisplay extends Application {
@@ -163,10 +170,6 @@ export class PlayerDisplay extends Application {
     }
 
     return `
-      <div style="margin-bottom:8px; font-size:13px; color:#aaa;">
-        Local tactical viewport — 1 square = 5 ft
-      </div>
-
       <div style="
         position: relative;
         width: ${VIEWPORT_SIZE}px;
@@ -289,7 +292,7 @@ export class PlayerDisplay extends Application {
     }
 
     const canRoll = combat.canUserModify(game.user, "update");
-    const sceneName = escapeHtml(combat.scene?.name ?? "Unknown Scene");
+    const sceneName = escapeHtml(getSceneNameForCombat(combat));
     const round = escapeHtml(combat.round ?? "-");
     const turn = escapeHtml((combat.turn ?? 0) + 1);
     const activeCombatantId = combat.combatant?.id;
@@ -346,7 +349,7 @@ export class PlayerDisplay extends Application {
         <div style="padding:10px 12px; background:#181b22; border-bottom:1px solid #3a3f49;">
           <div style="display:flex; justify-content:space-between; gap:8px; color:#fff;">
             <strong style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${sceneName}</strong>
-            <span style="color:#c4cad5;">R${round} T${turn}</span>
+            <span style="color:#c4cad5;">Round ${round} | Turn ${turn}</span>
           </div>
         </div>
         ${rollActionsHtml}
@@ -403,19 +406,26 @@ export class PlayerDisplay extends Application {
         <div style="flex:1; overflow:auto;" id="simple-companion-side-panel-body-${this.displayIndex}">
           ${panelHtml}
         </div>
+        <div style="padding:10px 12px; border-top:1px solid #555; background:#181b22;">
+          <button type="button" data-companion-end-turn style="
+            width:100%;
+            height:42px;
+            border:1px solid #656d7c;
+            background:#273140;
+            color:#fff;
+            cursor:pointer;
+            font-weight:700;
+          ">
+            <i class="fas fa-forward"></i> End Turn
+          </button>
+        </div>
       </aside>
     `;
   }
 
   async _renderInner() {
-    const data = await this.getData();
-    const safeName = escapeHtml(data.name);
-    const safeHp = escapeHtml(data.hp);
-
     return $(`
       <div style="padding:20px; font-size:16px;">
-        <h2>Display ${this.displayIndex}: ${safeName}</h2>
-        <p>HP: ${safeHp}</p>
         <div style="
           display:flex;
           gap:16px;
@@ -471,6 +481,9 @@ export class PlayerDisplay extends Application {
       this.refresh();
     } else if (target.dataset.companionRollNpc !== undefined) {
       await game.combat?.rollNPC({ updateTurn: true });
+      this.refresh();
+    } else if (target.dataset.companionEndTurn !== undefined) {
+      await game.combat?.nextTurn();
       this.refresh();
     }
   }
