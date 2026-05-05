@@ -8,6 +8,8 @@ const TOKEN_FOOTPRINT_PADDING = 4;
 const SIDE_PANEL_WIDTH = 420;
 const SIDE_PANEL_HEIGHT = 720;
 const TEMPLATE_CAPTURE_INTERVAL = 100;
+const TEMPLATE_HIGHLIGHT_COLOR = "rgba(106,168,255,0.34)";
+const TEMPLATE_HIGHLIGHT_BORDER = "rgba(148,197,255,0.72)";
 const TEMPLATE_PREVIEW_COLOR = "#6aa8ff";
 const TOKEN_RING_COLORS = {
   hostile: "#9e3834",
@@ -115,6 +117,25 @@ function getSceneGridDistance() {
 
 function templateDistanceToViewportPixels(distance) {
   return (Number(distance ?? 0) / getSceneGridDistance()) * GRID_PIXELS;
+}
+
+function degreesToRadians(degrees) {
+  return (Number(degrees ?? 0) * Math.PI) / 180;
+}
+
+function normalizeDegrees(degrees) {
+  return ((degrees % 360) + 540) % 360 - 180;
+}
+
+function rotatePoint(point, degrees) {
+  const radians = degreesToRadians(degrees);
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+
+  return {
+    x: point.x * cos - point.y * sin,
+    y: point.x * sin + point.y * cos
+  };
 }
 
 function cloneValue(value) {
@@ -320,6 +341,7 @@ export class PlayerDisplay extends Application {
     const point = this.pendingTemplateScreenPoint ?? { x: VIEWPORT_SIZE / 2, y: VIEWPORT_SIZE / 2 };
     if (!templateData) return "";
 
+    const highlightHtml = this.buildTemplateHighlightHtml(templateData, point);
     const type = templateData.t ?? templateData.type ?? "circle";
     const distancePixels = Math.max(templateDistanceToViewportPixels(templateData.distance), GRID_PIXELS / 2);
     const widthPixels = Math.max(templateDistanceToViewportPixels(templateData.width), GRID_PIXELS / 2);
@@ -368,6 +390,9 @@ export class PlayerDisplay extends Application {
     }
 
     return `
+      <div id="simple-companion-template-highlights-${this.displayIndex}">
+        ${highlightHtml}
+      </div>
       <div id="simple-companion-template-preview-${this.displayIndex}" style="
         position:absolute;
         ${shapeStyle}
@@ -378,6 +403,77 @@ export class PlayerDisplay extends Application {
         z-index:15;
       "></div>
     `;
+  }
+
+  buildTemplateHighlightHtml(templateData, point) {
+    const affectedCells = this.getAffectedTemplateCells(templateData, point);
+
+    return affectedCells.map((cell) => `
+      <div style="
+        position:absolute;
+        left:${cell.x - GRID_PIXELS / 2}px;
+        top:${cell.y - GRID_PIXELS / 2}px;
+        width:${GRID_PIXELS}px;
+        height:${GRID_PIXELS}px;
+        background:${TEMPLATE_HIGHLIGHT_COLOR};
+        border:1px solid ${TEMPLATE_HIGHLIGHT_BORDER};
+        box-sizing:border-box;
+        pointer-events:none;
+        z-index:4;
+      "></div>
+    `).join("");
+  }
+
+  getAffectedTemplateCells(templateData, point) {
+    const affectedCells = [];
+
+    for (let y = 0; y <= VIEWPORT_SIZE; y += GRID_PIXELS) {
+      for (let x = 0; x <= VIEWPORT_SIZE; x += GRID_PIXELS) {
+        if (this.isTemplateAffectingPoint(templateData, point, { x, y })) {
+          affectedCells.push({ x, y });
+        }
+      }
+    }
+
+    return affectedCells;
+  }
+
+  isTemplateAffectingPoint(templateData, origin, cellCenter) {
+    const type = templateData.t ?? templateData.type ?? "circle";
+    const distancePixels = Math.max(templateDistanceToViewportPixels(templateData.distance), GRID_PIXELS / 2);
+    const widthPixels = Math.max(templateDistanceToViewportPixels(templateData.width), GRID_PIXELS / 2);
+    const direction = Number(templateData.direction ?? 0);
+    const dx = cellCenter.x - origin.x;
+    const dy = cellCenter.y - origin.y;
+
+    if (type === "circle") {
+      return Math.hypot(dx, dy) <= distancePixels;
+    }
+
+    const localPoint = rotatePoint({ x: dx, y: dy }, -direction);
+
+    if (type === "ray") {
+      return localPoint.x >= 0
+        && localPoint.x <= distancePixels
+        && Math.abs(localPoint.y) <= widthPixels / 2;
+    }
+
+    if (type === "rect") {
+      return localPoint.x >= 0
+        && localPoint.x <= distancePixels
+        && localPoint.y >= 0
+        && localPoint.y <= widthPixels;
+    }
+
+    if (type === "cone") {
+      const angle = Number(templateData.angle ?? 90);
+      const pointDistance = Math.hypot(dx, dy);
+      const pointAngle = normalizeDegrees((Math.atan2(dy, dx) * 180) / Math.PI - direction);
+
+      return pointDistance <= distancePixels && Math.abs(pointAngle) <= angle / 2;
+    }
+
+    return false;
   }
 
   buildViewportHtml() {
@@ -800,10 +896,11 @@ export class PlayerDisplay extends Application {
     const point = this.pendingTemplateScreenPoint;
     if (!this.pendingTemplateData || !point) return;
 
-    const preview = getHtmlElement(this.element)
-      ?.querySelector?.(`#simple-companion-template-preview-${this.displayIndex}`);
+    const element = getHtmlElement(this.element);
+    const preview = element?.querySelector?.(`#simple-companion-template-preview-${this.displayIndex}`);
+    const highlights = element?.querySelector?.(`#simple-companion-template-highlights-${this.displayIndex}`);
 
-    if (!preview) {
+    if (!preview || !highlights) {
       this.refresh();
       return;
     }
@@ -813,6 +910,7 @@ export class PlayerDisplay extends Application {
     const widthPixels = Math.max(templateDistanceToViewportPixels(this.pendingTemplateData.width), GRID_PIXELS / 2);
     const direction = Number(this.pendingTemplateData.direction ?? 0);
 
+    highlights.innerHTML = this.buildTemplateHighlightHtml(this.pendingTemplateData, point);
     preview.style.display = "block";
     preview.style.transform = "";
     preview.style.clipPath = "";
