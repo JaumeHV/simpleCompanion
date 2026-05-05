@@ -13,7 +13,6 @@ export class PlayerDisplay extends Application {
   constructor(displayIndex, options = {}) {
     super(options);
     this.displayIndex = displayIndex;
-    this.gridCanvas = null;
     this.lastRefreshTime = 0;
     this.refreshDebounceDelay = 50; // ms
     this.pendingRefresh = null;
@@ -63,53 +62,30 @@ export class PlayerDisplay extends Application {
     };
   }
 
-  createGridCanvas() {
-    const canvas = document.createElement("canvas");
-    canvas.width = VIEWPORT_SIZE;
-    canvas.height = VIEWPORT_SIZE;
-    canvas.style.position = "absolute";
-    canvas.style.top = "0";
-    canvas.style.left = "0";
-    canvas.style.zIndex = "1";
-
-    const ctx = canvas.getContext("2d");
-    ctx.strokeStyle = GRID_COLOR;
-    ctx.lineWidth = 1;
-
+  buildGridHtml() {
+    let grid = "";
     const centerX = VIEWPORT_SIZE / 2;
     const centerY = VIEWPORT_SIZE / 2;
 
-    // Draw vertical lines
+    // Vertical lines
     for (let x = centerX - GRID_PIXELS / 2; x >= 0; x -= GRID_PIXELS) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, VIEWPORT_SIZE);
-      ctx.stroke();
+      grid += `<div style="position:absolute;left:${x}px;top:0;width:1px;height:${VIEWPORT_SIZE}px;background:${GRID_COLOR};z-index:1;"></div>`;
     }
 
     for (let x = centerX + GRID_PIXELS / 2; x < VIEWPORT_SIZE; x += GRID_PIXELS) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, VIEWPORT_SIZE);
-      ctx.stroke();
+      grid += `<div style="position:absolute;left:${x}px;top:0;width:1px;height:${VIEWPORT_SIZE}px;background:${GRID_COLOR};z-index:1;"></div>`;
     }
 
-    // Draw horizontal lines
+    // Horizontal lines
     for (let y = centerY - GRID_PIXELS / 2; y >= 0; y -= GRID_PIXELS) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(VIEWPORT_SIZE, y);
-      ctx.stroke();
+      grid += `<div style="position:absolute;left:0;top:${y}px;width:${VIEWPORT_SIZE}px;height:1px;background:${GRID_COLOR};z-index:1;"></div>`;
     }
 
     for (let y = centerY + GRID_PIXELS / 2; y < VIEWPORT_SIZE; y += GRID_PIXELS) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(VIEWPORT_SIZE, y);
-      ctx.stroke();
+      grid += `<div style="position:absolute;left:0;top:${y}px;width:${VIEWPORT_SIZE}px;height:1px;background:${GRID_COLOR};z-index:1;"></div>`;
     }
 
-    return canvas;
+    return grid;
   }
 
   buildViewportHtml() {
@@ -123,6 +99,7 @@ export class PlayerDisplay extends Application {
     const tokenCenterX = token.x + gridSize / 2;
     const tokenCenterY = token.y + gridSize / 2;
 
+    const grid = this.buildGridHtml();
     let tokensHtml = "";
 
     // Player token
@@ -160,7 +137,8 @@ export class PlayerDisplay extends Application {
         background: #0a0a0a;
         border: 2px solid #777;
         overflow: hidden;
-      " data-viewport="true">
+      ">
+        ${grid}
         ${tokensHtml}
 
         <div style="
@@ -247,37 +225,13 @@ export class PlayerDisplay extends Application {
   async _renderInner() {
     const data = await this.getData();
 
-    const html = await renderTemplate("templates/hud/container.html", {
-      content: `
-        <div style="padding:20px; font-size:16px;">
-          <h2>Display ${this.displayIndex}: ${data.name}</h2>
-          <p>HP: ${data.hp}</p>
-          ${this.buildViewportHtml()}
-        </div>
-      `
-    }).catch(() => {
-      // Fallback if template system fails
-      return `
-        <div style="padding:20px; font-size:16px;">
-          <h2>Display ${this.displayIndex}: ${data.name}</h2>
-          <p>HP: ${data.hp}</p>
-          ${this.buildViewportHtml()}
-        </div>
-      `;
-    });
-
-    return html;
-  }
-
-  activateListeners(html) {
-    super.activateListeners(html);
-    
-    // Inject grid canvas after render
-    const viewport = html.find("[data-viewport='true']");
-    if (viewport.length && !this.gridCanvas) {
-      this.gridCanvas = this.createGridCanvas();
-      viewport[0].insertBefore(this.gridCanvas, viewport[0].firstChild);
-    }
+    return `
+      <div style="padding:20px; font-size:16px;">
+        <h2>Display ${this.displayIndex}: ${data.name}</h2>
+        <p>HP: ${data.hp}</p>
+        ${this.buildViewportHtml()}
+      </div>
+    `;
   }
 
   refresh() {
@@ -308,7 +262,6 @@ export class PlayerDisplay extends Application {
     if (this.pendingRefresh) {
       clearTimeout(this.pendingRefresh);
     }
-    this.gridCanvas = null;
     delete activeDisplays[this.displayIndex];
     return super.close();
   }
