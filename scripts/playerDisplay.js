@@ -1,11 +1,22 @@
 const MODULE_ID = "simple-companion";
 
+// Viewport constants
+const VIEWPORT_SIZE = 360;
+const GRID_PIXELS = 36;
+const GRID_COLOR = "#333";
+const TOKEN_SIZE_PLAYER = 32;
+const TOKEN_SIZE_OTHER = 28;
+
 export const activeDisplays = {};
 
 export class PlayerDisplay extends Application {
   constructor(displayIndex, options = {}) {
     super(options);
     this.displayIndex = displayIndex;
+    this.gridCanvas = null;
+    this.lastRefreshTime = 0;
+    this.refreshDebounceDelay = 50; // ms
+    this.pendingRefresh = null;
     activeDisplays[displayIndex] = this;
   }
 
@@ -14,8 +25,8 @@ export class PlayerDisplay extends Application {
       id: "simple-companion-display",
       template: null,
       popOut: true,
-      width: 500,
-      height: 500,
+      width: 1280,
+      height: 800,
       resizable: true,
       title: "Player Display"
     });
@@ -52,77 +63,73 @@ export class PlayerDisplay extends Application {
     };
   }
 
+  createGridCanvas() {
+    const canvas = document.createElement("canvas");
+    canvas.width = VIEWPORT_SIZE;
+    canvas.height = VIEWPORT_SIZE;
+    canvas.style.position = "absolute";
+    canvas.style.top = "0";
+    canvas.style.left = "0";
+    canvas.style.zIndex = "1";
+
+    const ctx = canvas.getContext("2d");
+    ctx.strokeStyle = GRID_COLOR;
+    ctx.lineWidth = 1;
+
+    const centerX = VIEWPORT_SIZE / 2;
+    const centerY = VIEWPORT_SIZE / 2;
+
+    // Draw vertical lines
+    for (let x = centerX - GRID_PIXELS / 2; x >= 0; x -= GRID_PIXELS) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, VIEWPORT_SIZE);
+      ctx.stroke();
+    }
+
+    for (let x = centerX + GRID_PIXELS / 2; x < VIEWPORT_SIZE; x += GRID_PIXELS) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, VIEWPORT_SIZE);
+      ctx.stroke();
+    }
+
+    // Draw horizontal lines
+    for (let y = centerY - GRID_PIXELS / 2; y >= 0; y -= GRID_PIXELS) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(VIEWPORT_SIZE, y);
+      ctx.stroke();
+    }
+
+    for (let y = centerY + GRID_PIXELS / 2; y < VIEWPORT_SIZE; y += GRID_PIXELS) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(VIEWPORT_SIZE, y);
+      ctx.stroke();
+    }
+
+    return canvas;
+  }
+
   buildViewportHtml() {
     const token = this.getToken();
     if (!token) return `<p>No token on current scene</p>`;
 
-    const centerX = 180;
-    const centerY = 180;
-    const pixelsPerGrid = 36;
+    const centerX = VIEWPORT_SIZE / 2;
+    const centerY = VIEWPORT_SIZE / 2;
     const gridSize = canvas.grid.size;
 
     const tokenCenterX = token.x + gridSize / 2;
     const tokenCenterY = token.y + gridSize / 2;
 
-    let grid = "";
-
-    for (let x = centerX - pixelsPerGrid / 2; x >= 0; x -= pixelsPerGrid) {
-      grid += `
-        <div style="
-          position:absolute;
-          left:${x}px;
-          top:0;
-          width:1px;
-          height:360px;
-          background:#333;
-        "></div>
-      `;
-    }
-
-    for (let x = centerX + pixelsPerGrid / 2; x < 360; x += pixelsPerGrid) {
-      grid += `
-        <div style="
-          position:absolute;
-          left:${x}px;
-          top:0;
-          width:1px;
-          height:360px;
-          background:#333;
-        "></div>
-      `;
-    }
-
-    for (let y = centerY - pixelsPerGrid / 2; y >= 0; y -= pixelsPerGrid) {
-      grid += `
-        <div style="
-          position:absolute;
-          left:0;
-          top:${y}px;
-          width:360px;
-          height:1px;
-          background:#333;
-        "></div>
-      `;
-    }
-
-    for (let y = centerY + pixelsPerGrid / 2; y < 360; y += pixelsPerGrid) {
-      grid += `
-        <div style="
-          position:absolute;
-          left:0;
-          top:${y}px;
-          width:360px;
-          height:1px;
-          background:#333;
-        "></div>
-      `;
-    }
-
     let tokensHtml = "";
 
-    tokensHtml += this.buildTokenHtml(centerX, centerY, 32, token);
-    tokensHtml += this.buildLabelHtml(centerX, centerY, 32, token.name);
+    // Player token
+    tokensHtml += this.buildTokenHtml(centerX, centerY, TOKEN_SIZE_PLAYER, token);
+    tokensHtml += this.buildLabelHtml(centerX, centerY, TOKEN_SIZE_PLAYER, token.name);
 
+    // Other tokens
     for (const otherToken of canvas.tokens.placeables) {
       if (otherToken.id === token.id) continue;
 
@@ -132,13 +139,13 @@ export class PlayerDisplay extends Application {
       const dx = (otherCenterX - tokenCenterX) / gridSize;
       const dy = (otherCenterY - tokenCenterY) / gridSize;
 
-      const screenX = centerX + dx * pixelsPerGrid;
-      const screenY = centerY + dy * pixelsPerGrid;
+      const screenX = centerX + dx * GRID_PIXELS;
+      const screenY = centerY + dy * GRID_PIXELS;
 
-      if (screenX < -50 || screenX > 410 || screenY < -50 || screenY > 410) continue;
+      if (screenX < -50 || screenX > VIEWPORT_SIZE + 50 || screenY < -50 || screenY > VIEWPORT_SIZE + 50) continue;
 
-      tokensHtml += this.buildTokenHtml(screenX, screenY, 28, otherToken);
-      tokensHtml += this.buildLabelHtml(screenX, screenY, 28, otherToken.name);
+      tokensHtml += this.buildTokenHtml(screenX, screenY, TOKEN_SIZE_OTHER, otherToken);
+      tokensHtml += this.buildLabelHtml(screenX, screenY, TOKEN_SIZE_OTHER, otherToken.name);
     }
 
     return `
@@ -148,13 +155,12 @@ export class PlayerDisplay extends Application {
 
       <div id="simple-companion-viewport" style="
         position: relative;
-        width: 360px;
-        height: 360px;
+        width: ${VIEWPORT_SIZE}px;
+        height: ${VIEWPORT_SIZE}px;
         background: #0a0a0a;
         border: 2px solid #777;
         overflow: hidden;
-      ">
-        ${grid}
+      " data-viewport="true">
         ${tokensHtml}
 
         <div style="
@@ -241,16 +247,69 @@ export class PlayerDisplay extends Application {
   async _renderInner() {
     const data = await this.getData();
 
-    return `
-      <div style="padding:20px; font-size:16px;">
-        <h2>Display ${this.displayIndex}: ${data.name}</h2>
-        <p>HP: ${data.hp}</p>
-        ${this.buildViewportHtml()}
-      </div>
-    `;
+    const html = await renderTemplate("templates/hud/container.html", {
+      content: `
+        <div style="padding:20px; font-size:16px;">
+          <h2>Display ${this.displayIndex}: ${data.name}</h2>
+          <p>HP: ${data.hp}</p>
+          ${this.buildViewportHtml()}
+        </div>
+      `
+    }).catch(() => {
+      // Fallback if template system fails
+      return `
+        <div style="padding:20px; font-size:16px;">
+          <h2>Display ${this.displayIndex}: ${data.name}</h2>
+          <p>HP: ${data.hp}</p>
+          ${this.buildViewportHtml()}
+        </div>
+      `;
+    });
+
+    return html;
+  }
+
+  activateListeners(html) {
+    super.activateListeners(html);
+    
+    // Inject grid canvas after render
+    const viewport = html.find("[data-viewport='true']");
+    if (viewport.length && !this.gridCanvas) {
+      this.gridCanvas = this.createGridCanvas();
+      viewport[0].insertBefore(this.gridCanvas, viewport[0].firstChild);
+    }
   }
 
   refresh() {
-    this.render(false);
+    const now = Date.now();
+    
+    // Debounce refresh calls
+    if (this.pendingRefresh) {
+      clearTimeout(this.pendingRefresh);
+    }
+
+    const timeSinceLastRefresh = now - this.lastRefreshTime;
+    
+    if (timeSinceLastRefresh < this.refreshDebounceDelay) {
+      // Schedule refresh after debounce delay
+      this.pendingRefresh = setTimeout(() => {
+        this.lastRefreshTime = Date.now();
+        this.render(false);
+        this.pendingRefresh = null;
+      }, this.refreshDebounceDelay - timeSinceLastRefresh);
+    } else {
+      // Refresh immediately
+      this.lastRefreshTime = now;
+      this.render(false);
+    }
+  }
+
+  close() {
+    if (this.pendingRefresh) {
+      clearTimeout(this.pendingRefresh);
+    }
+    this.gridCanvas = null;
+    delete activeDisplays[this.displayIndex];
+    return super.close();
   }
 }
