@@ -67,7 +67,7 @@ Hooks.once("ready", () => {
   });
 });
 
-Hooks.on("updateTokenDocument", (tokenDoc, changes) => {
+Hooks.on("updateToken", (tokenDoc, changes) => {
   if (isDebugMode()) {
     console.log("Token document updated", tokenDoc.name, changes);
   }
@@ -75,7 +75,21 @@ Hooks.on("updateTokenDocument", (tokenDoc, changes) => {
   refreshAllDisplays();
 });
 
+Hooks.on("updateDocument", (document) => {
+  if (document.documentName === "Token") {
+    refreshAllDisplays();
+  }
+});
+
 Hooks.on("moveToken", () => {
+  refreshAllDisplays();
+});
+
+Hooks.on("recordToken", () => {
+  refreshAllDisplays();
+});
+
+Hooks.on("pauseToken", () => {
   refreshAllDisplays();
 });
 

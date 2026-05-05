@@ -29,6 +29,10 @@ function collectionValues(collection) {
   return Array.from(collection);
 }
 
+function getHtmlElement(html) {
+  return html?.[0] ?? html;
+}
+
 export class PlayerDisplay extends Application {
   constructor(displayIndex, options = {}) {
     super(options);
@@ -422,34 +426,36 @@ export class PlayerDisplay extends Application {
 
   activateListeners(html) {
     super.activateListeners(html);
+    const element = getHtmlElement(html);
+    if (!element?.addEventListener) return;
 
-    html.find("[data-companion-panel]").on("click", (event) => {
-      this.activePanel = event.currentTarget.dataset.companionPanel;
-      this.render(false);
+    element.addEventListener("click", async (event) => {
+      const target = event.target?.closest?.(
+        "[data-companion-panel], [data-companion-open-chat], [data-companion-roll-initiative], [data-companion-roll-all], [data-companion-roll-npc]"
+      );
+      if (!target) return;
 
-      if (this.activePanel === "chat") {
-        this.openNativeChatPopout();
+      event.preventDefault();
+
+      if (target.dataset.companionPanel) {
+        this.activePanel = target.dataset.companionPanel;
+        this.render(false);
+
+        if (this.activePanel === "chat") {
+          await this.openNativeChatPopout();
+        }
+      } else if (target.dataset.companionOpenChat !== undefined) {
+        await this.openNativeChatPopout();
+      } else if (target.dataset.companionRollInitiative) {
+        await game.combat?.rollInitiative(target.dataset.companionRollInitiative, { updateTurn: true });
+        this.refresh();
+      } else if (target.dataset.companionRollAll !== undefined) {
+        await game.combat?.rollAll({ updateTurn: true });
+        this.refresh();
+      } else if (target.dataset.companionRollNpc !== undefined) {
+        await game.combat?.rollNPC({ updateTurn: true });
+        this.refresh();
       }
-    });
-
-    html.find("[data-companion-open-chat]").on("click", () => {
-      this.openNativeChatPopout();
-    });
-
-    html.find("[data-companion-roll-initiative]").on("click", async (event) => {
-      const combatantId = event.currentTarget.dataset.companionRollInitiative;
-      await game.combat?.rollInitiative(combatantId, { updateTurn: true });
-      this.refresh();
-    });
-
-    html.find("[data-companion-roll-all]").on("click", async () => {
-      await game.combat?.rollAll({ updateTurn: true });
-      this.refresh();
-    });
-
-    html.find("[data-companion-roll-npc]").on("click", async () => {
-      await game.combat?.rollNPC({ updateTurn: true });
-      this.refresh();
     });
   }
 
@@ -462,7 +468,7 @@ export class PlayerDisplay extends Application {
     }
 
     const popout = await chat.renderPopout();
-    const element = this.element?.[0] ?? this.element;
+    const element = getHtmlElement(this.element);
     const rect = element?.getBoundingClientRect?.();
 
     if (rect && popout?.setPosition) {
