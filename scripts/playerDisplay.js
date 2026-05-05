@@ -412,7 +412,7 @@ export class PlayerDisplay extends Application {
     const safeName = escapeHtml(data.name);
     const safeHp = escapeHtml(data.hp);
 
-    return `
+    return $(`
       <div style="padding:20px; font-size:16px;">
         <h2>Display ${this.displayIndex}: ${safeName}</h2>
         <p>HP: ${safeHp}</p>
@@ -429,7 +429,7 @@ export class PlayerDisplay extends Application {
           ${this.buildSidePanelHtml()}
         </div>
       </div>
-    `;
+    `);
   }
 
   activateListeners(html) {
