@@ -41,7 +41,6 @@ function buildDisplayTool(displayIndex) {
     icon: "fas fa-tv",
     order: displayIndex,
     button: true,
-    onChange: () => openDisplay(displayIndex),
     onClick: () => openDisplay(displayIndex)
   };
 }
@@ -144,7 +143,6 @@ Hooks.on("getSceneControlButtons", (controls) => {
     icon: "fas fa-tablet-alt",
     layer: "tokens",
     order: 99,
-    activeTool: "open-display-1",
     tools: buildDisplayTools()
   };
 
