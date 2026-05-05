@@ -74,6 +74,14 @@ function getTokenCanvasCenter(token, gridSize) {
   };
 }
 
+function getActiveTemplatePreview() {
+  const previewChildren = Array.from(canvas.templates?.preview?.children ?? []);
+  return previewChildren.find((child) => {
+    const documentName = child.document?.documentName ?? child.document?.constructor?.documentName;
+    return documentName === "MeasuredTemplate";
+  }) ?? null;
+}
+
 const COMPANION_BUTTON_SELECTOR = [
   "[data-companion-panel]",
   "[data-companion-open-chat]",
@@ -494,6 +502,9 @@ export class PlayerDisplay extends Application {
     }
 
     const element = getHtmlElement(html);
+    const viewport = element?.querySelector?.(`#simple-companion-viewport-${this.displayIndex}`);
+    viewport?.addEventListener?.("click", (event) => this.handleViewportClick(event));
+
     element?.addEventListener?.("click", (event) => {
       const target = event.target?.closest?.(COMPANION_BUTTON_SELECTOR);
       if (target && element.contains?.(target)) {
@@ -527,6 +538,42 @@ export class PlayerDisplay extends Application {
       await game.combat?.nextTurn();
       this.refresh();
     }
+  }
+
+  async handleViewportClick(event) {
+    const preview = getActiveTemplatePreview();
+    if (!preview?.document?.toObject) return;
+
+    const token = this.getToken();
+    if (!token || !canvas.scene) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const viewport = event.currentTarget;
+    const rect = viewport.getBoundingClientRect();
+    const viewportX = ((event.clientX - rect.left) / rect.width) * VIEWPORT_SIZE;
+    const viewportY = ((event.clientY - rect.top) / rect.height) * VIEWPORT_SIZE;
+    const gridSize = canvas.grid.size;
+    const tokenCanvasCenter = getTokenCanvasCenter(token, gridSize);
+
+    const scenePoint = {
+      x: tokenCanvasCenter.x + ((viewportX - VIEWPORT_SIZE / 2) / GRID_PIXELS) * gridSize,
+      y: tokenCanvasCenter.y + ((viewportY - VIEWPORT_SIZE / 2) / GRID_PIXELS) * gridSize
+    };
+
+    const snappedPoint = canvas.templates.getSnappedPoint?.(scenePoint)
+      ?? canvas.grid.getSnappedPoint?.(scenePoint)
+      ?? scenePoint;
+
+    const templateData = preview.document.toObject();
+    delete templateData._id;
+    templateData.x = snappedPoint.x;
+    templateData.y = snappedPoint.y;
+
+    await canvas.scene.createEmbeddedDocuments("MeasuredTemplate", [templateData]);
+    canvas.templates.clearPreviewContainer?.();
+    this.refresh();
   }
 
   async openNativeChatPopout() {
