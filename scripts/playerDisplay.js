@@ -64,6 +64,16 @@ function getTokenFootprint(token) {
   };
 }
 
+function getTokenCanvasCenter(token, gridSize) {
+  const width = Math.max(Number(token.document?.width ?? 1), 0.25);
+  const height = Math.max(Number(token.document?.height ?? 1), 0.25);
+
+  return {
+    x: token.x + (width * gridSize) / 2,
+    y: token.y + (height * gridSize) / 2
+  };
+}
+
 const COMPANION_BUTTON_SELECTOR = [
   "[data-companion-panel]",
   "[data-companion-open-chat]",
@@ -180,8 +190,7 @@ export class PlayerDisplay extends Application {
     const centerY = VIEWPORT_SIZE / 2;
     const gridSize = canvas.grid.size;
 
-    const tokenCenterX = token.x + gridSize / 2;
-    const tokenCenterY = token.y + gridSize / 2;
+    const tokenCanvasCenter = getTokenCanvasCenter(token, gridSize);
 
     const grid = this.buildGridHtml();
     let tokensHtml = "";
@@ -196,11 +205,10 @@ export class PlayerDisplay extends Application {
       if (otherToken.id === token.id) continue;
       if (isTokenHidden(otherToken)) continue;
 
-      const otherCenterX = otherToken.x + gridSize / 2;
-      const otherCenterY = otherToken.y + gridSize / 2;
+      const otherCanvasCenter = getTokenCanvasCenter(otherToken, gridSize);
 
-      const dx = (otherCenterX - tokenCenterX) / gridSize;
-      const dy = (otherCenterY - tokenCenterY) / gridSize;
+      const dx = (otherCanvasCenter.x - tokenCanvasCenter.x) / gridSize;
+      const dy = (otherCanvasCenter.y - tokenCanvasCenter.y) / gridSize;
 
       const screenX = centerX + dx * GRID_PIXELS;
       const screenY = centerY + dy * GRID_PIXELS;
@@ -270,7 +278,6 @@ export class PlayerDisplay extends Application {
     const tokenName = escapeHtml(token.name);
     const ringColor = getTokenRingColor(token);
     const imageInset = Math.min(TOKEN_FOOTPRINT_PADDING, footprint.width / 6, footprint.height / 6);
-    const borderRadius = Math.min(10, footprint.width / 4, footprint.height / 4);
 
     if (img) {
       return `
@@ -280,7 +287,7 @@ export class PlayerDisplay extends Application {
           top: ${y - footprint.height / 2}px;
           width: ${footprint.width}px;
           height: ${footprint.height}px;
-          border-radius: ${borderRadius}px;
+          border-radius: 50%;
           border: 2px solid ${ringColor};
           padding: ${imageInset}px;
           overflow: hidden;
@@ -292,7 +299,7 @@ export class PlayerDisplay extends Application {
             width: 100%;
             height: 100%;
             object-fit: cover;
-            border-radius: ${Math.max(0, borderRadius - imageInset)}px;
+            border-radius: 50%;
           ">
         </div>
       `;
@@ -306,7 +313,7 @@ export class PlayerDisplay extends Application {
         width: ${footprint.width}px;
         height: ${footprint.height}px;
         background: ${ringColor};
-        border-radius: ${borderRadius}px;
+        border-radius: 50%;
         border: 2px solid ${ringColor};
         z-index: 10;
       "></div>
