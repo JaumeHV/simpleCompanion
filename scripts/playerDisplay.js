@@ -3,6 +3,7 @@ const MODULE_ID = "simple-companion";
 // Viewport constants
 const VIEWPORT_SIZE = 720;
 const GRID_PIXELS = 72;
+const HALF_GRID_PIXELS = GRID_PIXELS / 2;
 const GRID_COLOR = "#333";
 const TOKEN_FOOTPRINT_PADDING = 4;
 const SIDE_PANEL_WIDTH = 420;
@@ -117,6 +118,30 @@ function getSceneGridDistance() {
 
 function templateDistanceToViewportPixels(distance) {
   return (Number(distance ?? 0) / getSceneGridDistance()) * GRID_PIXELS;
+}
+
+function getSceneHalfGridSize() {
+  return canvas.grid.size / 2;
+}
+
+function snapToIncrement(value, increment) {
+  return Math.round(value / increment) * increment;
+}
+
+function snapViewportPointToHalfGrid(point) {
+  return {
+    x: snapToIncrement(point.x, HALF_GRID_PIXELS),
+    y: snapToIncrement(point.y, HALF_GRID_PIXELS)
+  };
+}
+
+function snapScenePointToHalfGrid(point) {
+  const halfGridSize = getSceneHalfGridSize();
+
+  return {
+    x: snapToIncrement(point.x, halfGridSize),
+    y: snapToIncrement(point.y, halfGridSize)
+  };
 }
 
 function degreesToRadians(degrees) {
@@ -875,9 +900,7 @@ export class PlayerDisplay extends Application {
       y: tokenCanvasCenter.y + ((viewportPoint.y - VIEWPORT_SIZE / 2) / GRID_PIXELS) * gridSize
     };
 
-    return canvas.templates.getSnappedPoint?.(scenePoint)
-      ?? canvas.grid.getSnappedPoint?.(scenePoint)
-      ?? scenePoint;
+    return snapScenePointToHalfGrid(scenePoint);
   }
 
   getViewportScreenPoint(event) {
@@ -886,10 +909,10 @@ export class PlayerDisplay extends Application {
 
     const rect = viewport.getBoundingClientRect();
 
-    return {
+    return snapViewportPointToHalfGrid({
       x: ((event.clientX - rect.left) / rect.width) * VIEWPORT_SIZE,
       y: ((event.clientY - rect.top) / rect.height) * VIEWPORT_SIZE
-    };
+    });
   }
 
   updateTemplatePreviewOverlay() {
