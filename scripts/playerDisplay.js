@@ -41,7 +41,21 @@ let suppressNextMainTemplateInteraction = false;
 let suppressMainTemplatePlacementUntil = 0;
 let suppressMainTemplatePlacementClearTimer = null;
 let suppressedTemplateLayerClicksRemaining = 0;
+let suppressedMeasuredTemplateCreatesRemaining = 0;
 const patchedTemplateLayers = new WeakSet();
+
+export function suppressNextMeasuredTemplateCreates(count = 1) {
+  suppressedMeasuredTemplateCreatesRemaining = Math.max(
+    suppressedMeasuredTemplateCreatesRemaining,
+    Math.max(Number(count) || 0, 0)
+  );
+}
+
+export function consumeSuppressedMeasuredTemplateCreate() {
+  if (suppressedMeasuredTemplateCreatesRemaining <= 0) return false;
+  suppressedMeasuredTemplateCreatesRemaining -= 1;
+  return true;
+}
 
 function shouldSuppressMainTemplatePlacement() {
   if (suppressNextMainTemplateInteraction && Date.now() >= suppressMainTemplatePlacementUntil) {
@@ -1119,6 +1133,7 @@ export class PlayerDisplay extends Application {
     this.pendingTemplateScreenPoint = null;
     suppressMainTemplatePlacementFor();
     suppressNextTemplateLayerClicks(1);
+    suppressNextMeasuredTemplateCreates(1);
     this.refresh();
   }
 

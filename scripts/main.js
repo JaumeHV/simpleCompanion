@@ -1,5 +1,5 @@
 import { registerSettings } from "./settings.js";
-import { PlayerDisplay, activeDisplays } from "./playerDisplay.js";
+import { PlayerDisplay, activeDisplays, consumeSuppressedMeasuredTemplateCreate } from "./playerDisplay.js";
 
 const MODULE_ID = "simple-companion";
 
@@ -126,6 +126,11 @@ Hooks.on("deleteCombat", () => {
 
 Hooks.on("createCombatant", () => {
   refreshAllDisplays();
+});
+
+Hooks.on("preCreateMeasuredTemplate", (_document, _data, _options, userId) => {
+  if (userId !== game.user?.id) return;
+  if (consumeSuppressedMeasuredTemplateCreate()) return false;
 });
 
 Hooks.on("updateCombatant", () => {
