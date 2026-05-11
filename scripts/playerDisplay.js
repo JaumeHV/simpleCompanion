@@ -37,18 +37,26 @@ export const activeDisplays = {};
 
 let canvasTemplatePlacementGuardInstalled = false;
 let measuredTemplatePreviewGuardInstalled = false;
-let suppressMainTemplatePlacementUntil = 0;
+let suppressNextMainTemplateInteraction = false;
 const patchedTemplateLayers = new WeakSet();
 
 function shouldSuppressMainTemplatePlacement() {
-  return Date.now() < suppressMainTemplatePlacementUntil;
+  return suppressNextMainTemplateInteraction;
 }
 
-function suppressMainTemplatePlacementFor(durationMs = 500) {
-  suppressMainTemplatePlacementUntil = Math.max(
-    suppressMainTemplatePlacementUntil,
-    Date.now() + durationMs
-  );
+function suppressMainTemplatePlacementFor() {
+  suppressNextMainTemplateInteraction = true;
+}
+
+function consumeSuppressedTemplateEvent(event) {
+  if (!event) return;
+  event.preventDefault?.();
+  event.stopPropagation?.();
+  event.stopImmediatePropagation?.();
+
+  if (event.type === "click") {
+    suppressNextMainTemplateInteraction = false;
+  }
 }
 
 function escapeHtml(value) {
@@ -203,9 +211,7 @@ function blockMainCanvasTemplatePlacement(event) {
   if (!hasActiveDisplay() || !isPrimaryPointerEvent(event)) return;
 
   if (shouldSuppressMainTemplatePlacement()) {
-    event.preventDefault();
-    event.stopPropagation();
-    event.stopImmediatePropagation?.();
+    consumeSuppressedTemplateEvent(event);
     return;
   }
 
@@ -237,8 +243,7 @@ function installTemplateLayerPlacementGuard() {
 
     templateLayer[methodName] = function simpleCompanionTemplatePlacementGuard(event, ...args) {
       if (shouldSuppressMainTemplatePlacement()) {
-        event?.preventDefault?.();
-        event?.stopPropagation?.();
+        consumeSuppressedTemplateEvent(event);
         return false;
       }
 
