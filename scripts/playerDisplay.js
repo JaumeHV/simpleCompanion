@@ -243,15 +243,15 @@ function clearNativeTemplatePreview(preview) {
 }
 
 function getTemplateIconPath(template) {
-  const texturePath = template?.document?.texture ?? template?.document?.texture?.src;
-  if (typeof texturePath === "string" && texturePath.trim()) return texturePath;
-
   const originUuid = template?.document?.flags?.dnd5e?.origin;
   if (typeof originUuid === "string" && originUuid.trim()) {
     const source = globalThis.fromUuidSync?.(originUuid);
     const sourceImg = source?.img ?? source?.texture?.src;
     if (typeof sourceImg === "string" && sourceImg.trim()) return sourceImg;
   }
+
+  const texturePath = template?.document?.texture ?? template?.document?.texture?.src;
+  if (typeof texturePath === "string" && texturePath.trim()) return texturePath;
 
   return "icons/svg/explosion.svg";
 }
@@ -291,7 +291,7 @@ function isPrimaryPointerEvent(event) {
 }
 
 function isTemplateActionTarget(event) {
-  return Boolean(event?.target?.closest?.("[data-companion-template-confirm], [data-companion-template-cancel]"));
+  return Boolean(event?.target?.closest?.("[data-companion-template-confirm], [data-companion-template-cancel], [data-companion-template-rotate-handle]"));
 }
 
 function blockMainCanvasTemplatePlacement(event) {
@@ -381,7 +381,8 @@ const COMPANION_BUTTON_SELECTOR = [
   "[data-companion-roll-initiative]",
   "[data-companion-end-turn]",
   "[data-companion-template-confirm]",
-  "[data-companion-template-cancel]"
+  "[data-companion-template-cancel]",
+  "[data-companion-template-rotate-handle]"
 ].join(", ");
 
 export class PlayerDisplay extends Application {
@@ -394,7 +395,10 @@ export class PlayerDisplay extends Application {
     this.activePanel = "combat";
     this.pendingTemplateData = null;
     this.pendingTemplateScreenPoint = null;
+    this.pendingTemplateIconPath = null;
     this.templateCaptureInterval = null;
+    this.isTemplateRotationDragging = false;
+    this.templateRotationPointerId = null;
     activeDisplays[displayIndex] = this;
   }
 
@@ -563,6 +567,19 @@ export class PlayerDisplay extends Application {
         gap:12px;
         z-index:20;
       ">
+        <button type="button" data-companion-template-rotate-handle style="
+          width:52px;
+          height:52px;
+          border-radius:14px;
+          border:1px solid rgba(255,255,255,0.36);
+          background:rgba(38,62,112,0.62);
+          cursor:pointer;
+          backdrop-filter:blur(2px);
+          overflow:hidden;
+          touch-action:none;
+        " aria-label="Rotate template">
+          <img src="${escapeHtml(this.pendingTemplateIconPath ?? "icons/svg/explosion.svg")}" style="width:100%;height:100%;object-fit:cover;pointer-events:none;">
+        </button>
         <button type="button" data-companion-template-cancel style="
           width:52px;
           height:52px;
@@ -987,6 +1004,8 @@ export class PlayerDisplay extends Application {
     viewport?.addEventListener?.("click", (event) => this.handleViewportClick(event));
     viewport?.addEventListener?.("pointerdown", (event) => this.handleViewportPointerDown(event));
     viewport?.addEventListener?.("pointermove", (event) => this.handleViewportPointerMove(event));
+    viewport?.addEventListener?.("pointerup", (event) => this.stopTemplateRotationDrag(event));
+    viewport?.addEventListener?.("pointercancel", (event) => this.stopTemplateRotationDrag(event));
     installCanvasTemplatePlacementGuard();
     installTemplateLayerPlacementGuard();
     installMeasuredTemplatePreviewGuard();
@@ -996,6 +1015,13 @@ export class PlayerDisplay extends Application {
       const target = event.target?.closest?.(COMPANION_BUTTON_SELECTOR);
       if (target && element.contains?.(target)) {
         this.handleCompanionButtonClick(event, target);
+      }
+    });
+
+    element?.addEventListener?.("pointerdown", (event) => {
+      const target = event.target?.closest?.("[data-companion-template-rotate-handle]");
+      if (target && element.contains?.(target)) {
+        this.startTemplateRotationDrag(event);
       }
     });
   }
@@ -1020,6 +1046,7 @@ export class PlayerDisplay extends Application {
     delete templateData._id;
     this.pendingTemplateData = templateData;
     this.pendingTemplateScreenPoint = { x: VIEWPORT_SIZE / 2, y: VIEWPORT_SIZE / 2 };
+    this.pendingTemplateIconPath = getTemplateIconPath(preview);
 
     clearNativeTemplatePreview(preview);
     endNativeTemplatePlacementMode();
@@ -1159,6 +1186,54 @@ export class PlayerDisplay extends Application {
     }
   }
 
+  startTemplateRotationDrag(event) {
+    if (!this.pendingTemplateData || !isPrimaryPointerEvent(event)) return;
+
+    const viewport = event.target?.closest?.(`#simple-companion-viewport-${this.displayIndex}`);
+    if (!viewport) return;
+
+    this.isTemplateRotationDragging = true;
+    this.templateRotationPointerId = event.pointerId;
+    viewport.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  stopTemplateRotationDrag(event) {
+    if (!this.isTemplateRotationDragging) return;
+    if (event?.pointerId !== undefined && this.templateRotationPointerId !== null && event.pointerId !== this.templateRotationPointerId) return;
+
+    const viewport = event?.currentTarget;
+    if (viewport?.releasePointerCapture && this.templateRotationPointerId !== null) {
+      viewport.releasePointerCapture(this.templateRotationPointerId);
+    }
+
+    this.isTemplateRotationDragging = false;
+    this.templateRotationPointerId = null;
+  }
+
+  rotatePendingTemplateToViewportPoint(viewportPoint) {
+    if (!this.pendingTemplateData || !viewportPoint) return;
+
+    const originPoint = this.pendingTemplateScreenPoint ?? { x: VIEWPORT_SIZE / 2, y: VIEWPORT_SIZE / 2 };
+    const previousOffset = getTemplateIconOffset(this.pendingTemplateData);
+    const centerPoint = {
+      x: originPoint.x + previousOffset.x,
+      y: originPoint.y + previousOffset.y
+    };
+
+    const angleDegrees = (Math.atan2(viewportPoint.y - centerPoint.y, viewportPoint.x - centerPoint.x) * 180) / Math.PI;
+    this.pendingTemplateData.direction = angleDegrees;
+
+    const nextOffset = getTemplateIconOffset(this.pendingTemplateData);
+    this.pendingTemplateScreenPoint = snapViewportPointToHalfGrid({
+      x: centerPoint.x - nextOffset.x,
+      y: centerPoint.y - nextOffset.y
+    });
+
+    this.updateTemplatePreviewOverlay();
+  }
+
   getViewportScenePoint(event) {
     const token = this.getToken();
     if (!token || !canvas.scene) return null;
@@ -1283,6 +1358,13 @@ export class PlayerDisplay extends Application {
   }
 
   handleViewportPointerMove(event) {
+    if (this.isTemplateRotationDragging && this.pendingTemplateData) {
+      if (this.templateRotationPointerId !== null && event.pointerId !== this.templateRotationPointerId) return;
+      const viewportPoint = this.getViewportScreenPoint(event);
+      if (viewportPoint) this.rotatePendingTemplateToViewportPoint(viewportPoint);
+      return;
+    }
+
     if (this.pendingTemplateData) return;
     this.syncTemplatePreviewToViewport(event);
   }
@@ -1314,6 +1396,7 @@ export class PlayerDisplay extends Application {
       ? cloneValue(previewState.templateData)
       : preview.document.toObject();
     delete this.pendingTemplateData._id;
+    this.pendingTemplateIconPath = getTemplateIconPath(preview);
     this.pendingTemplateScreenPoint = this.getViewportScreenPoint(event) ?? this.pendingTemplateScreenPoint ?? { x: VIEWPORT_SIZE / 2, y: VIEWPORT_SIZE / 2 };
 
     clearNativeTemplatePreview(preview);
@@ -1360,6 +1443,9 @@ export class PlayerDisplay extends Application {
     endNativeTemplatePlacementMode();
     this.pendingTemplateData = null;
     this.pendingTemplateScreenPoint = null;
+    this.pendingTemplateIconPath = null;
+    this.isTemplateRotationDragging = false;
+    this.templateRotationPointerId = null;
     suppressMainTemplatePlacementFor();
     suppressNextTemplateLayerClicks(1);
     suppressNextMeasuredTemplateCreates(1);
@@ -1372,6 +1458,9 @@ export class PlayerDisplay extends Application {
 
     this.pendingTemplateData = null;
     this.pendingTemplateScreenPoint = null;
+    this.pendingTemplateIconPath = null;
+    this.isTemplateRotationDragging = false;
+    this.templateRotationPointerId = null;
     clearNativeTemplatePreview(getActiveTemplatePreview());
     endNativeTemplatePlacementMode();
     suppressMainTemplatePlacementFor();
