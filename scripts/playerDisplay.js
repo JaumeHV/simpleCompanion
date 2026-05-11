@@ -262,6 +262,10 @@ function isPrimaryPointerEvent(event) {
   return event.button === undefined || event.button === 0;
 }
 
+function isTemplateActionTarget(event) {
+  return Boolean(event?.target?.closest?.("[data-companion-template-confirm], [data-companion-template-cancel]"));
+}
+
 function blockMainCanvasTemplatePlacement(event) {
   if (!hasActiveDisplay() || !isPrimaryPointerEvent(event)) return;
 
@@ -347,7 +351,9 @@ const COMPANION_BUTTON_SELECTOR = [
   "[data-companion-panel]",
   "[data-companion-open-chat]",
   "[data-companion-roll-initiative]",
-  "[data-companion-end-turn]"
+  "[data-companion-end-turn]",
+  "[data-companion-template-confirm]",
+  "[data-companion-template-cancel]"
 ].join(", ");
 
 export class PlayerDisplay extends Application {
@@ -520,6 +526,44 @@ export class PlayerDisplay extends Application {
         pointer-events:none;
         z-index:15;
       "></div>
+      <div id="simple-companion-template-actions-${this.displayIndex}" style="
+        position:absolute;
+        left:${point.x}px;
+        top:${Math.min(VIEWPORT_SIZE - 30, point.y + GRID_PIXELS)}px;
+        transform:translateX(-50%);
+        display:flex;
+        gap:12px;
+        z-index:20;
+      ">
+        <button type="button" data-companion-template-cancel style="
+          width:52px;
+          height:52px;
+          border-radius:14px;
+          border:1px solid rgba(255,255,255,0.36);
+          background:rgba(151,45,45,0.62);
+          color:#fff;
+          font-size:24px;
+          font-weight:700;
+          cursor:pointer;
+          backdrop-filter:blur(2px);
+        " aria-label="Cancel template placement">
+          <i class="fas fa-times"></i>
+        </button>
+        <button type="button" data-companion-template-confirm style="
+          width:52px;
+          height:52px;
+          border-radius:14px;
+          border:1px solid rgba(255,255,255,0.36);
+          background:rgba(41,130,73,0.62);
+          color:#fff;
+          font-size:24px;
+          font-weight:700;
+          cursor:pointer;
+          backdrop-filter:blur(2px);
+        " aria-label="Confirm template placement">
+          <i class="fas fa-check"></i>
+        </button>
+      </div>
     `;
   }
 
@@ -976,6 +1020,10 @@ export class PlayerDisplay extends Application {
 
       await game.combat?.nextTurn();
       this.refresh();
+    } else if (target.dataset.companionTemplateConfirm !== undefined) {
+      await this.confirmTemplatePlacement(event);
+    } else if (target.dataset.companionTemplateCancel !== undefined) {
+      this.cancelTemplatePlacement(event);
     }
   }
 
@@ -1016,8 +1064,9 @@ export class PlayerDisplay extends Application {
     const element = getHtmlElement(this.element);
     const preview = element?.querySelector?.(`#simple-companion-template-preview-${this.displayIndex}`);
     const highlights = element?.querySelector?.(`#simple-companion-template-highlights-${this.displayIndex}`);
+    const actions = element?.querySelector?.(`#simple-companion-template-actions-${this.displayIndex}`);
 
-    if (!preview || !highlights) {
+    if (!preview || !highlights || !actions) {
       this.refresh();
       return;
     }
@@ -1028,6 +1077,8 @@ export class PlayerDisplay extends Application {
     const direction = Number(this.pendingTemplateData.direction ?? 0);
 
     highlights.innerHTML = this.buildTemplateHighlightHtml(this.pendingTemplateData, point);
+    actions.style.left = `${point.x}px`;
+    actions.style.top = `${Math.min(VIEWPORT_SIZE - 30, point.y + GRID_PIXELS)}px`;
     preview.style.display = "block";
     preview.style.transform = "";
     preview.style.clipPath = "";
@@ -1100,37 +1151,97 @@ export class PlayerDisplay extends Application {
   }
 
   handleViewportPointerMove(event) {
+    if (this.pendingTemplateData) return;
     this.syncTemplatePreviewToViewport(event);
   }
 
   async handleViewportPointerDown(event) {
+    if (isTemplateActionTarget(event)) return;
     if (!isPrimaryPointerEvent(event)) return;
     await this.handleViewportClick(event);
   }
 
   async handleViewportClick(event) {
+    if (isTemplateActionTarget(event)) return;
+
+    if (this.pendingTemplateData) {
+      const previewState = this.syncTemplatePreviewToViewport(event);
+      if (!previewState?.snappedPoint) return;
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
     const previewState = this.syncTemplatePreviewToViewport(event);
     const preview = previewState?.preview ?? getActiveTemplatePreview();
     if (!preview?.document?.toObject && !previewState?.templateData) return;
     const snappedPoint = previewState?.snappedPoint ?? this.getViewportScenePoint(event);
     if (!snappedPoint || !canvas.scene) return;
 
-    event.preventDefault();
-    event.stopPropagation();
-
-    const templateData = previewState?.templateData
+    this.pendingTemplateData = previewState?.templateData
       ? cloneValue(previewState.templateData)
       : preview.document.toObject();
+    delete this.pendingTemplateData._id;
+    this.pendingTemplateScreenPoint = this.getViewportScreenPoint(event) ?? this.pendingTemplateScreenPoint ?? { x: VIEWPORT_SIZE / 2, y: VIEWPORT_SIZE / 2 };
+
+    clearNativeTemplatePreview(preview);
+    endNativeTemplatePlacementMode();
+
+    event.preventDefault();
+    event.stopPropagation();
+    this.refresh();
+  }
+
+  getViewportScenePointFromScreenPoint(viewportPoint) {
+    const token = this.getToken();
+    if (!token || !canvas.scene || !viewportPoint) return null;
+
+    const gridSize = canvas.grid.size;
+    const tokenCanvasCenter = getTokenCanvasCenter(token, gridSize);
+
+    const scenePoint = {
+      x: tokenCanvasCenter.x + ((viewportPoint.x - VIEWPORT_SIZE / 2) / GRID_PIXELS) * gridSize,
+      y: tokenCanvasCenter.y + ((viewportPoint.y - VIEWPORT_SIZE / 2) / GRID_PIXELS) * gridSize
+    };
+
+    return snapScenePointToHalfGrid(scenePoint);
+  }
+
+  async confirmTemplatePlacement(event) {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+
+    if (!this.pendingTemplateData || !canvas.scene) return;
+
+    const viewportPoint = this.pendingTemplateScreenPoint ?? { x: VIEWPORT_SIZE / 2, y: VIEWPORT_SIZE / 2 };
+    const snappedPoint = this.getViewportScenePointFromScreenPoint(viewportPoint);
+    if (!snappedPoint) return;
+
+    const templateData = cloneValue(this.pendingTemplateData);
     delete templateData._id;
     templateData.x = snappedPoint.x;
     templateData.y = snappedPoint.y;
 
     await canvas.scene.createEmbeddedDocuments("MeasuredTemplate", [templateData]);
     canvas.templates.clearPreviewContainer?.();
-    clearNativeTemplatePreview(preview);
+    clearNativeTemplatePreview(getActiveTemplatePreview());
     endNativeTemplatePlacementMode();
     this.pendingTemplateData = null;
     this.pendingTemplateScreenPoint = null;
+    suppressMainTemplatePlacementFor();
+    suppressNextTemplateLayerClicks(1);
+    suppressNextMeasuredTemplateCreates(1);
+    this.refresh();
+  }
+
+  cancelTemplatePlacement(event) {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+
+    this.pendingTemplateData = null;
+    this.pendingTemplateScreenPoint = null;
+    clearNativeTemplatePreview(getActiveTemplatePreview());
+    endNativeTemplatePlacementMode();
     suppressMainTemplatePlacementFor();
     suppressNextTemplateLayerClicks(1);
     suppressNextMeasuredTemplateCreates(1);
