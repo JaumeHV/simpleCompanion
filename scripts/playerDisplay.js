@@ -12,6 +12,8 @@ const TEMPLATE_CAPTURE_INTERVAL = 100;
 const TEMPLATE_HIGHLIGHT_COLOR = "rgba(106,168,255,0.34)";
 const TEMPLATE_HIGHLIGHT_BORDER = "rgba(148,197,255,0.72)";
 const TEMPLATE_PREVIEW_COLOR = "#6aa8ff";
+const ACTIVE_TEMPLATE_FILL = "rgba(86, 142, 255, 0.18)";
+const ACTIVE_TEMPLATE_BORDER = "rgba(123, 174, 255, 0.72)";
 const TOKEN_RING_COLORS = {
   hostile: "#9e3834",
   friendly: "#317a33",
@@ -238,6 +240,32 @@ function clearNativeTemplatePreview(preview) {
   if (canvas.templates?._preview === preview) {
     canvas.templates._preview = null;
   }
+}
+
+function getTemplateIconPath(template) {
+  const texturePath = template?.document?.texture ?? template?.document?.texture?.src;
+  if (typeof texturePath === "string" && texturePath.trim()) return texturePath;
+
+  const originUuid = template?.document?.flags?.dnd5e?.origin;
+  if (typeof originUuid === "string" && originUuid.trim()) {
+    const source = globalThis.fromUuidSync?.(originUuid);
+    const sourceImg = source?.img ?? source?.texture?.src;
+    if (typeof sourceImg === "string" && sourceImg.trim()) return sourceImg;
+  }
+
+  return "icons/svg/explosion.svg";
+}
+
+function getTemplateIconOffset(templateData) {
+  const type = templateData?.t ?? templateData?.type ?? "circle";
+  const direction = Number(templateData?.direction ?? 0);
+  const distancePixels = Math.max(templateDistanceToViewportPixels(templateData?.distance), GRID_PIXELS / 2);
+  const widthPixels = Math.max(templateDistanceToViewportPixels(templateData?.width), GRID_PIXELS / 2);
+
+  if (type === "ray") return rotatePoint({ x: distancePixels / 2, y: 0 }, direction);
+  if (type === "rect") return rotatePoint({ x: distancePixels / 2, y: widthPixels / 2 }, direction);
+  if (type === "cone") return rotatePoint({ x: distancePixels / 2, y: 0 }, direction);
+  return { x: 0, y: 0 };
 }
 
 function endNativeTemplatePlacementMode() {
@@ -650,6 +678,7 @@ export class PlayerDisplay extends Application {
 
     const grid = this.buildGridHtml();
     let tokensHtml = "";
+    const activeTemplatesHtml = this.buildActiveTemplatesHtml(tokenCanvasCenter, gridSize);
 
     // Player token
     const tokenFootprint = getTokenFootprint(token);
@@ -689,6 +718,7 @@ export class PlayerDisplay extends Application {
         overflow: hidden;
       " id="simple-companion-viewport-${this.displayIndex}">
         ${grid}
+        ${activeTemplatesHtml}
         ${tokensHtml}
         ${templatePreviewHtml}
 
@@ -994,6 +1024,108 @@ export class PlayerDisplay extends Application {
     clearNativeTemplatePreview(preview);
     endNativeTemplatePlacementMode();
     return true;
+  }
+
+  buildActiveTemplatesHtml(tokenCanvasCenter, gridSize) {
+    const templates = canvas.templates?.placeables ?? [];
+    if (!templates.length) return "";
+
+    const centerX = VIEWPORT_SIZE / 2;
+    const centerY = VIEWPORT_SIZE / 2;
+    const elements = [];
+
+    for (const template of templates) {
+      const templateData = template?.document?.toObject?.();
+      if (!templateData) continue;
+
+      const originX = centerX + ((templateData.x - tokenCanvasCenter.x) / gridSize) * GRID_PIXELS;
+      const originY = centerY + ((templateData.y - tokenCanvasCenter.y) / gridSize) * GRID_PIXELS;
+      if (originX < -220 || originX > VIEWPORT_SIZE + 220 || originY < -220 || originY > VIEWPORT_SIZE + 220) continue;
+
+      const type = templateData.t ?? templateData.type ?? "circle";
+      const distancePixels = Math.max(templateDistanceToViewportPixels(templateData.distance), GRID_PIXELS / 2);
+      const widthPixels = Math.max(templateDistanceToViewportPixels(templateData.width), GRID_PIXELS / 2);
+      const direction = Number(templateData.direction ?? 0);
+      const iconOffset = getTemplateIconOffset(templateData);
+      const iconPath = escapeHtml(getTemplateIconPath(template));
+
+      let shapeStyle = "";
+
+      if (type === "ray") {
+        shapeStyle = `
+          left:${originX}px;
+          top:${originY - widthPixels / 2}px;
+          width:${distancePixels}px;
+          height:${widthPixels}px;
+          transform-origin:0 50%;
+          transform:rotate(${direction}deg);
+          border-radius:999px;
+        `;
+      } else if (type === "rect") {
+        shapeStyle = `
+          left:${originX}px;
+          top:${originY}px;
+          width:${distancePixels}px;
+          height:${widthPixels}px;
+          transform-origin:0 0;
+          transform:rotate(${direction}deg);
+        `;
+      } else if (type === "cone") {
+        const diameter = distancePixels * 2;
+        shapeStyle = `
+          left:${originX - distancePixels}px;
+          top:${originY - distancePixels}px;
+          width:${diameter}px;
+          height:${diameter}px;
+          border-radius:50%;
+          clip-path:polygon(50% 50%, 100% 0, 100% 100%);
+          transform:rotate(${direction}deg);
+        `;
+      } else {
+        const diameter = distancePixels * 2;
+        shapeStyle = `
+          left:${originX - distancePixels}px;
+          top:${originY - distancePixels}px;
+          width:${diameter}px;
+          height:${diameter}px;
+          border-radius:50%;
+        `;
+      }
+
+      elements.push(`
+        <div style="
+          position:absolute;
+          ${shapeStyle}
+          border:2px solid ${ACTIVE_TEMPLATE_BORDER};
+          background:${ACTIVE_TEMPLATE_FILL};
+          box-sizing:border-box;
+          pointer-events:none;
+          z-index:6;
+        "></div>
+      `);
+
+      elements.push(`
+        <div style="
+          position:absolute;
+          left:${originX + iconOffset.x}px;
+          top:${originY + iconOffset.y}px;
+          width:30px;
+          height:30px;
+          transform:translate(-50%, -50%);
+          border-radius:50%;
+          border:1px solid rgba(214,231,255,0.9);
+          background:rgba(13,24,44,0.72);
+          box-shadow:0 2px 8px rgba(0,0,0,0.35);
+          overflow:hidden;
+          pointer-events:none;
+          z-index:7;
+        ">
+          <img src="${iconPath}" style="width:100%;height:100%;object-fit:cover;">
+        </div>
+      `);
+    }
+
+    return elements.join("");
   }
 
   async handleCompanionButtonClick(event, target) {
