@@ -40,6 +40,7 @@ let measuredTemplatePreviewGuardInstalled = false;
 let suppressNextMainTemplateInteraction = false;
 let suppressMainTemplatePlacementUntil = 0;
 let suppressMainTemplatePlacementClearTimer = null;
+let suppressedTemplateLayerClicksRemaining = 0;
 const patchedTemplateLayers = new WeakSet();
 
 function shouldSuppressMainTemplatePlacement() {
@@ -67,6 +68,13 @@ function scheduleMainTemplateSuppressionClear() {
     suppressNextMainTemplateInteraction = false;
     suppressMainTemplatePlacementClearTimer = null;
   }, 0);
+}
+
+function suppressNextTemplateLayerClicks(count = 1) {
+  suppressedTemplateLayerClicksRemaining = Math.max(
+    suppressedTemplateLayerClicksRemaining,
+    Math.max(Number(count) || 0, 0)
+  );
 }
 
 function consumeSuppressedTemplateEvent(event) {
@@ -261,6 +269,12 @@ function installTemplateLayerPlacementGuard() {
     if (typeof originalMethod !== "function") continue;
 
     templateLayer[methodName] = function simpleCompanionTemplatePlacementGuard(event, ...args) {
+      if (methodName === "_onClickLeft" && suppressedTemplateLayerClicksRemaining > 0) {
+        suppressedTemplateLayerClicksRemaining -= 1;
+        consumeSuppressedTemplateEvent(event);
+        return false;
+      }
+
       if (shouldSuppressMainTemplatePlacement()) {
         consumeSuppressedTemplateEvent(event);
         return false;
@@ -1088,6 +1102,7 @@ export class PlayerDisplay extends Application {
     this.pendingTemplateData = null;
     this.pendingTemplateScreenPoint = null;
     suppressMainTemplatePlacementFor();
+    suppressNextTemplateLayerClicks(1);
     this.refresh();
   }
 
