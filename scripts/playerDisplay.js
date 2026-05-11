@@ -226,6 +226,20 @@ function clearNativeTemplatePreview(preview) {
   }
 }
 
+function endNativeTemplatePlacementMode() {
+  const controls = ui.controls;
+  const activeControl = controls?.activeControl ?? controls?.control?.name;
+  if (activeControl !== "measure") return;
+
+  if (typeof controls?.activateControl === "function") {
+    controls.activateControl("token");
+  }
+
+  if (typeof controls?.activateTool === "function") {
+    controls.activateTool("select");
+  }
+}
+
 function hasActiveDisplay() {
   return Object.keys(activeDisplays).length > 0;
 }
@@ -920,6 +934,7 @@ export class PlayerDisplay extends Application {
     this.pendingTemplateScreenPoint = { x: VIEWPORT_SIZE / 2, y: VIEWPORT_SIZE / 2 };
 
     clearNativeTemplatePreview(preview);
+    endNativeTemplatePlacementMode();
     return true;
   }
 
@@ -1099,6 +1114,7 @@ export class PlayerDisplay extends Application {
     await canvas.scene.createEmbeddedDocuments("MeasuredTemplate", [templateData]);
     canvas.templates.clearPreviewContainer?.();
     clearNativeTemplatePreview(preview);
+    endNativeTemplatePlacementMode();
     this.pendingTemplateData = null;
     this.pendingTemplateScreenPoint = null;
     suppressMainTemplatePlacementFor();
