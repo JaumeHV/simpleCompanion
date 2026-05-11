@@ -54,7 +54,7 @@ function consumeSuppressedTemplateEvent(event) {
   event.stopPropagation?.();
   event.stopImmediatePropagation?.();
 
-  if (event.type === "click") {
+  if (event.type === "pointerup" || event.type === "mouseup" || event.type === "click") {
     suppressNextMainTemplateInteraction = false;
   }
 }
