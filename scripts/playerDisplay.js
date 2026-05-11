@@ -38,14 +38,20 @@ export const activeDisplays = {};
 let canvasTemplatePlacementGuardInstalled = false;
 let measuredTemplatePreviewGuardInstalled = false;
 let suppressNextMainTemplateInteraction = false;
+let suppressMainTemplatePlacementUntil = 0;
 const patchedTemplateLayers = new WeakSet();
 
 function shouldSuppressMainTemplatePlacement() {
+  if (suppressNextMainTemplateInteraction && Date.now() >= suppressMainTemplatePlacementUntil) {
+    suppressNextMainTemplateInteraction = false;
+  }
+
   return suppressNextMainTemplateInteraction;
 }
 
-function suppressMainTemplatePlacementFor() {
+function suppressMainTemplatePlacementFor(durationMs = 1500) {
   suppressNextMainTemplateInteraction = true;
+  suppressMainTemplatePlacementUntil = Date.now() + durationMs;
 }
 
 function consumeSuppressedTemplateEvent(event) {
@@ -54,7 +60,7 @@ function consumeSuppressedTemplateEvent(event) {
   event.stopPropagation?.();
   event.stopImmediatePropagation?.();
 
-  if (event.type === "pointerup" || event.type === "mouseup" || event.type === "click") {
+  if (event.type === "click") {
     suppressNextMainTemplateInteraction = false;
   }
 }
