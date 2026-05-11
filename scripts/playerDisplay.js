@@ -144,13 +144,13 @@ function getTokenRingColor(token) {
   return TOKEN_RING_COLORS.neutral;
 }
 
-function getTokenFootprint(token) {
+function getTokenFootprint(token, gridPixels = GRID_PIXELS) {
   const width = Number(token.document?.width ?? 1);
   const height = Number(token.document?.height ?? 1);
 
   return {
-    width: Math.max(width, 0.25) * GRID_PIXELS,
-    height: Math.max(height, 0.25) * GRID_PIXELS
+    width: Math.max(width, 0.25) * gridPixels,
+    height: Math.max(height, 0.25) * gridPixels
   };
 }
 
@@ -182,8 +182,8 @@ function getSceneGridDistance() {
   return Number(canvas.scene?.grid?.distance ?? canvas.grid?.distance ?? 5) || 5;
 }
 
-function templateDistanceToViewportPixels(distance) {
-  return (Number(distance ?? 0) / getSceneGridDistance()) * GRID_PIXELS;
+function templateDistanceToViewportPixels(distance, gridPixels = GRID_PIXELS) {
+  return (Number(distance ?? 0) / getSceneGridDistance()) * gridPixels;
 }
 
 function getSceneHalfGridSize() {
@@ -194,10 +194,10 @@ function snapToIncrement(value, increment) {
   return Math.round(value / increment) * increment;
 }
 
-function snapViewportPointToHalfGrid(point) {
+function snapViewportPointToHalfGrid(point, halfGridPixels = HALF_GRID_PIXELS) {
   return {
-    x: snapToIncrement(point.x, HALF_GRID_PIXELS),
-    y: snapToIncrement(point.y, HALF_GRID_PIXELS)
+    x: snapToIncrement(point.x, halfGridPixels),
+    y: snapToIncrement(point.y, halfGridPixels)
   };
 }
 
@@ -259,11 +259,11 @@ function getTemplateIconPath(template) {
   return "icons/svg/explosion.svg";
 }
 
-function getTemplateIconOffset(templateData) {
+function getTemplateIconOffset(templateData, gridPixels = GRID_PIXELS) {
   const type = templateData?.t ?? templateData?.type ?? "circle";
   const direction = Number(templateData?.direction ?? 0);
-  const distancePixels = Math.max(templateDistanceToViewportPixels(templateData?.distance), GRID_PIXELS / 2);
-  const widthPixels = Math.max(templateDistanceToViewportPixels(templateData?.width), GRID_PIXELS / 2);
+  const distancePixels = Math.max(templateDistanceToViewportPixels(templateData?.distance, gridPixels), gridPixels / 2);
+  const widthPixels = Math.max(templateDistanceToViewportPixels(templateData?.width, gridPixels), gridPixels / 2);
 
   if (type === "ray") return rotatePoint({ x: distancePixels / 2, y: 0 }, direction);
   if (type === "rect") return rotatePoint({ x: distancePixels / 2, y: widthPixels / 2 }, direction);
@@ -476,22 +476,23 @@ export class PlayerDisplay extends Application {
     let grid = "";
     const centerX = VIEWPORT_SIZE / 2;
     const centerY = VIEWPORT_SIZE / 2;
+    const gridPixels = this.getViewportGridPixels();
 
     // Vertical lines
-    for (let x = centerX - GRID_PIXELS / 2; x >= 0; x -= GRID_PIXELS) {
+    for (let x = centerX - gridPixels / 2; x >= 0; x -= gridPixels) {
       grid += `<div style="position:absolute;left:${x}px;top:0;width:1px;height:${VIEWPORT_SIZE}px;background:${GRID_COLOR};z-index:1;"></div>`;
     }
 
-    for (let x = centerX + GRID_PIXELS / 2; x < VIEWPORT_SIZE; x += GRID_PIXELS) {
+    for (let x = centerX + gridPixels / 2; x < VIEWPORT_SIZE; x += gridPixels) {
       grid += `<div style="position:absolute;left:${x}px;top:0;width:1px;height:${VIEWPORT_SIZE}px;background:${GRID_COLOR};z-index:1;"></div>`;
     }
 
     // Horizontal lines
-    for (let y = centerY - GRID_PIXELS / 2; y >= 0; y -= GRID_PIXELS) {
+    for (let y = centerY - gridPixels / 2; y >= 0; y -= gridPixels) {
       grid += `<div style="position:absolute;left:0;top:${y}px;width:${VIEWPORT_SIZE}px;height:1px;background:${GRID_COLOR};z-index:1;"></div>`;
     }
 
-    for (let y = centerY + GRID_PIXELS / 2; y < VIEWPORT_SIZE; y += GRID_PIXELS) {
+    for (let y = centerY + gridPixels / 2; y < VIEWPORT_SIZE; y += gridPixels) {
       grid += `<div style="position:absolute;left:0;top:${y}px;width:${VIEWPORT_SIZE}px;height:1px;background:${GRID_COLOR};z-index:1;"></div>`;
     }
 
@@ -504,9 +505,10 @@ export class PlayerDisplay extends Application {
     if (!templateData) return "";
 
     const highlightHtml = this.buildTemplateHighlightHtml(templateData, point);
+    const gridPixels = this.getViewportGridPixels();
     const type = templateData.t ?? templateData.type ?? "circle";
-    const distancePixels = Math.max(templateDistanceToViewportPixels(templateData.distance), GRID_PIXELS / 2);
-    const widthPixels = Math.max(templateDistanceToViewportPixels(templateData.width), GRID_PIXELS / 2);
+    const distancePixels = Math.max(templateDistanceToViewportPixels(templateData.distance, gridPixels), gridPixels / 2);
+    const widthPixels = Math.max(templateDistanceToViewportPixels(templateData.width, gridPixels), gridPixels / 2);
     const direction = Number(templateData.direction ?? 0);
     let shapeStyle = "";
 
@@ -567,7 +569,7 @@ export class PlayerDisplay extends Application {
       <div id="simple-companion-template-actions-${this.displayIndex}" style="
         position:absolute;
         left:${point.x}px;
-        top:${Math.min(VIEWPORT_SIZE - 30, point.y + GRID_PIXELS)}px;
+        top:${Math.min(VIEWPORT_SIZE - 30, point.y + gridPixels)}px;
         transform:translateX(-50%);
         display:flex;
         gap:12px;
@@ -618,16 +620,30 @@ export class PlayerDisplay extends Application {
     `;
   }
 
+  getViewportGridPixels() {
+    return GRID_PIXELS * this.viewportZoom;
+  }
+
+  getViewportHalfGridPixels() {
+    return this.getViewportGridPixels() / 2;
+  }
+
+  getViewportVisibleGridCount() {
+    const count = VIEWPORT_SIZE / this.getViewportGridPixels();
+    return Math.max(3, Math.round(count));
+  }
+
   buildTemplateHighlightHtml(templateData, point) {
     const affectedCells = this.getAffectedTemplateCells(templateData, point);
+    const gridPixels = this.getViewportGridPixels();
 
     return affectedCells.map((cell) => `
       <div style="
         position:absolute;
-        left:${cell.x - GRID_PIXELS / 2}px;
-        top:${cell.y - GRID_PIXELS / 2}px;
-        width:${GRID_PIXELS}px;
-        height:${GRID_PIXELS}px;
+        left:${cell.x - gridPixels / 2}px;
+        top:${cell.y - gridPixels / 2}px;
+        width:${gridPixels}px;
+        height:${gridPixels}px;
         background:${TEMPLATE_HIGHLIGHT_COLOR};
         border:1px solid ${TEMPLATE_HIGHLIGHT_BORDER};
         box-sizing:border-box;
@@ -639,9 +655,10 @@ export class PlayerDisplay extends Application {
 
   getAffectedTemplateCells(templateData, point) {
     const affectedCells = [];
+    const gridPixels = this.getViewportGridPixels();
 
-    for (let y = 0; y <= VIEWPORT_SIZE; y += GRID_PIXELS) {
-      for (let x = 0; x <= VIEWPORT_SIZE; x += GRID_PIXELS) {
+    for (let y = 0; y <= VIEWPORT_SIZE; y += gridPixels) {
+      for (let x = 0; x <= VIEWPORT_SIZE; x += gridPixels) {
         if (this.isTemplateAffectingPoint(templateData, point, { x, y })) {
           affectedCells.push({ x, y });
         }
@@ -652,9 +669,10 @@ export class PlayerDisplay extends Application {
   }
 
   isTemplateAffectingPoint(templateData, origin, cellCenter) {
+    const gridPixels = this.getViewportGridPixels();
     const type = templateData.t ?? templateData.type ?? "circle";
-    const distancePixels = Math.max(templateDistanceToViewportPixels(templateData.distance), GRID_PIXELS / 2);
-    const widthPixels = Math.max(templateDistanceToViewportPixels(templateData.width), GRID_PIXELS / 2);
+    const distancePixels = Math.max(templateDistanceToViewportPixels(templateData.distance, gridPixels), gridPixels / 2);
+    const widthPixels = Math.max(templateDistanceToViewportPixels(templateData.width, gridPixels), gridPixels / 2);
     const direction = Number(templateData.direction ?? 0);
     const dx = cellCenter.x - origin.x;
     const dy = cellCenter.y - origin.y;
@@ -696,6 +714,7 @@ export class PlayerDisplay extends Application {
     const centerX = VIEWPORT_SIZE / 2;
     const centerY = VIEWPORT_SIZE / 2;
     const gridSize = canvas.grid.size;
+    const gridPixels = this.getViewportGridPixels();
 
     const tokenCanvasCenter = getTokenCanvasCenter(token, gridSize);
 
@@ -704,7 +723,7 @@ export class PlayerDisplay extends Application {
     const activeTemplatesHtml = this.buildActiveTemplatesHtml(tokenCanvasCenter, gridSize);
 
     // Player token
-    const tokenFootprint = getTokenFootprint(token);
+    const tokenFootprint = getTokenFootprint(token, gridPixels);
     tokensHtml += this.buildTokenHtml(centerX, centerY, token, tokenFootprint);
     tokensHtml += this.buildLabelHtml(centerX, centerY, tokenFootprint, token.name);
 
@@ -718,19 +737,19 @@ export class PlayerDisplay extends Application {
       const dx = (otherCanvasCenter.x - tokenCanvasCenter.x) / gridSize;
       const dy = (otherCanvasCenter.y - tokenCanvasCenter.y) / gridSize;
 
-      const screenX = centerX + dx * GRID_PIXELS;
-      const screenY = centerY + dy * GRID_PIXELS;
+      const screenX = centerX + dx * gridPixels;
+      const screenY = centerY + dy * gridPixels;
 
       if (screenX < -50 || screenX > VIEWPORT_SIZE + 50 || screenY < -50 || screenY > VIEWPORT_SIZE + 50) continue;
 
-      const otherFootprint = getTokenFootprint(otherToken);
+      const otherFootprint = getTokenFootprint(otherToken, gridPixels);
       tokensHtml += this.buildTokenHtml(screenX, screenY, otherToken, otherFootprint);
       tokensHtml += this.buildLabelHtml(screenX, screenY, otherFootprint, otherToken.name);
     }
 
     const templatePreviewHtml = this.buildTemplatePreviewHtml();
 
-    const zoomPercent = Math.round(this.viewportZoom * 100);
+    const visibleGridCount = this.getViewportVisibleGridCount();
 
     return `
       <div style="
@@ -742,17 +761,10 @@ export class PlayerDisplay extends Application {
         border: 2px solid #777;
         overflow: hidden;
       " id="simple-companion-viewport-${this.displayIndex}">
-        <div style="
-          position:absolute;
-          inset:0;
-          transform:scale(${this.viewportZoom});
-          transform-origin:50% 50%;
-        ">
-          ${grid}
-          ${activeTemplatesHtml}
-          ${tokensHtml}
-          ${templatePreviewHtml}
-        </div>
+        ${grid}
+        ${activeTemplatesHtml}
+        ${tokensHtml}
+        ${templatePreviewHtml}
 
         <div style="
           position:absolute;
@@ -792,7 +804,7 @@ export class PlayerDisplay extends Application {
             line-height:1;
             cursor:pointer;
           ">-</button>
-          <div style="min-width:48px; text-align:center; color:#fff; font-size:12px; font-weight:700;">${zoomPercent}%</div>
+          <div style="min-width:54px; text-align:center; color:#fff; font-size:12px; font-weight:700;">${visibleGridCount}x${visibleGridCount}</div>
           <button type="button" data-companion-zoom-in style="
             width:44px;
             height:44px;
@@ -1112,21 +1124,22 @@ export class PlayerDisplay extends Application {
 
     const centerX = VIEWPORT_SIZE / 2;
     const centerY = VIEWPORT_SIZE / 2;
+    const gridPixels = this.getViewportGridPixels();
     const elements = [];
 
     for (const template of templates) {
       const templateData = template?.document?.toObject?.();
       if (!templateData) continue;
 
-      const originX = centerX + ((templateData.x - tokenCanvasCenter.x) / gridSize) * GRID_PIXELS;
-      const originY = centerY + ((templateData.y - tokenCanvasCenter.y) / gridSize) * GRID_PIXELS;
+      const originX = centerX + ((templateData.x - tokenCanvasCenter.x) / gridSize) * gridPixels;
+      const originY = centerY + ((templateData.y - tokenCanvasCenter.y) / gridSize) * gridPixels;
       if (originX < -220 || originX > VIEWPORT_SIZE + 220 || originY < -220 || originY > VIEWPORT_SIZE + 220) continue;
 
       const type = templateData.t ?? templateData.type ?? "circle";
-      const distancePixels = Math.max(templateDistanceToViewportPixels(templateData.distance), GRID_PIXELS / 2);
-      const widthPixels = Math.max(templateDistanceToViewportPixels(templateData.width), GRID_PIXELS / 2);
+      const distancePixels = Math.max(templateDistanceToViewportPixels(templateData.distance, gridPixels), gridPixels / 2);
+      const widthPixels = Math.max(templateDistanceToViewportPixels(templateData.width, gridPixels), gridPixels / 2);
       const direction = Number(templateData.direction ?? 0);
-      const iconOffset = getTemplateIconOffset(templateData);
+      const iconOffset = getTemplateIconOffset(templateData, gridPixels);
       const iconPath = escapeHtml(getTemplateIconPath(template));
 
       let shapeStyle = "";
@@ -1280,7 +1293,8 @@ export class PlayerDisplay extends Application {
     if (!this.pendingTemplateData || !viewportPoint) return;
 
     const originPoint = this.pendingTemplateScreenPoint ?? { x: VIEWPORT_SIZE / 2, y: VIEWPORT_SIZE / 2 };
-    const previousOffset = getTemplateIconOffset(this.pendingTemplateData);
+    const gridPixels = this.getViewportGridPixels();
+    const previousOffset = getTemplateIconOffset(this.pendingTemplateData, gridPixels);
     const centerPoint = {
       x: originPoint.x + previousOffset.x,
       y: originPoint.y + previousOffset.y
@@ -1289,11 +1303,11 @@ export class PlayerDisplay extends Application {
     const angleDegrees = (Math.atan2(viewportPoint.y - centerPoint.y, viewportPoint.x - centerPoint.x) * 180) / Math.PI;
     this.pendingTemplateData.direction = angleDegrees;
 
-    const nextOffset = getTemplateIconOffset(this.pendingTemplateData);
+    const nextOffset = getTemplateIconOffset(this.pendingTemplateData, gridPixels);
     this.pendingTemplateScreenPoint = snapViewportPointToHalfGrid({
       x: centerPoint.x - nextOffset.x,
       y: centerPoint.y - nextOffset.y
-    });
+    }, this.getViewportHalfGridPixels());
 
     this.updateTemplatePreviewOverlay();
   }
@@ -1306,11 +1320,12 @@ export class PlayerDisplay extends Application {
     if (!viewportPoint) return null;
 
     const gridSize = canvas.grid.size;
+    const gridPixels = this.getViewportGridPixels();
     const tokenCanvasCenter = getTokenCanvasCenter(token, gridSize);
 
     const scenePoint = {
-      x: tokenCanvasCenter.x + ((viewportPoint.x - VIEWPORT_SIZE / 2) / GRID_PIXELS) * gridSize,
-      y: tokenCanvasCenter.y + ((viewportPoint.y - VIEWPORT_SIZE / 2) / GRID_PIXELS) * gridSize
+      x: tokenCanvasCenter.x + ((viewportPoint.x - VIEWPORT_SIZE / 2) / gridPixels) * gridSize,
+      y: tokenCanvasCenter.y + ((viewportPoint.y - VIEWPORT_SIZE / 2) / gridPixels) * gridSize
     };
 
     return snapScenePointToHalfGrid(scenePoint);
@@ -1327,13 +1342,7 @@ export class PlayerDisplay extends Application {
       y: ((event.clientY - rect.top) / rect.height) * VIEWPORT_SIZE
     };
 
-    const center = VIEWPORT_SIZE / 2;
-    const unscaledPoint = {
-      x: center + (rawPoint.x - center) / this.viewportZoom,
-      y: center + (rawPoint.y - center) / this.viewportZoom
-    };
-
-    return snapViewportPointToHalfGrid(unscaledPoint);
+    return snapViewportPointToHalfGrid(rawPoint, this.getViewportHalfGridPixels());
   }
 
   updateTemplatePreviewOverlay() {
@@ -1351,13 +1360,14 @@ export class PlayerDisplay extends Application {
     }
 
     const type = this.pendingTemplateData.t ?? this.pendingTemplateData.type ?? "circle";
-    const distancePixels = Math.max(templateDistanceToViewportPixels(this.pendingTemplateData.distance), GRID_PIXELS / 2);
-    const widthPixels = Math.max(templateDistanceToViewportPixels(this.pendingTemplateData.width), GRID_PIXELS / 2);
+    const gridPixels = this.getViewportGridPixels();
+    const distancePixels = Math.max(templateDistanceToViewportPixels(this.pendingTemplateData.distance, gridPixels), gridPixels / 2);
+    const widthPixels = Math.max(templateDistanceToViewportPixels(this.pendingTemplateData.width, gridPixels), gridPixels / 2);
     const direction = Number(this.pendingTemplateData.direction ?? 0);
 
     highlights.innerHTML = this.buildTemplateHighlightHtml(this.pendingTemplateData, point);
     actions.style.left = `${point.x}px`;
-    actions.style.top = `${Math.min(VIEWPORT_SIZE - 30, point.y + GRID_PIXELS)}px`;
+    actions.style.top = `${Math.min(VIEWPORT_SIZE - 30, point.y + gridPixels)}px`;
     preview.style.display = "block";
     preview.style.transform = "";
     preview.style.clipPath = "";
@@ -1484,11 +1494,12 @@ export class PlayerDisplay extends Application {
     if (!token || !canvas.scene || !viewportPoint) return null;
 
     const gridSize = canvas.grid.size;
+    const gridPixels = this.getViewportGridPixels();
     const tokenCanvasCenter = getTokenCanvasCenter(token, gridSize);
 
     const scenePoint = {
-      x: tokenCanvasCenter.x + ((viewportPoint.x - VIEWPORT_SIZE / 2) / GRID_PIXELS) * gridSize,
-      y: tokenCanvasCenter.y + ((viewportPoint.y - VIEWPORT_SIZE / 2) / GRID_PIXELS) * gridSize
+      x: tokenCanvasCenter.x + ((viewportPoint.x - VIEWPORT_SIZE / 2) / gridPixels) * gridSize,
+      y: tokenCanvasCenter.y + ((viewportPoint.y - VIEWPORT_SIZE / 2) / gridPixels) * gridSize
     };
 
     return snapScenePointToHalfGrid(scenePoint);
