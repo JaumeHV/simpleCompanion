@@ -39,6 +39,7 @@ let canvasTemplatePlacementGuardInstalled = false;
 let measuredTemplatePreviewGuardInstalled = false;
 let suppressNextMainTemplateInteraction = false;
 let suppressMainTemplatePlacementUntil = 0;
+let suppressMainTemplatePlacementClearTimer = null;
 const patchedTemplateLayers = new WeakSet();
 
 function shouldSuppressMainTemplatePlacement() {
@@ -52,6 +53,20 @@ function shouldSuppressMainTemplatePlacement() {
 function suppressMainTemplatePlacementFor(durationMs = 1500) {
   suppressNextMainTemplateInteraction = true;
   suppressMainTemplatePlacementUntil = Date.now() + durationMs;
+
+  if (suppressMainTemplatePlacementClearTimer) {
+    clearTimeout(suppressMainTemplatePlacementClearTimer);
+    suppressMainTemplatePlacementClearTimer = null;
+  }
+}
+
+function scheduleMainTemplateSuppressionClear() {
+  if (suppressMainTemplatePlacementClearTimer) return;
+
+  suppressMainTemplatePlacementClearTimer = setTimeout(() => {
+    suppressNextMainTemplateInteraction = false;
+    suppressMainTemplatePlacementClearTimer = null;
+  }, 0);
 }
 
 function consumeSuppressedTemplateEvent(event) {
@@ -60,9 +75,7 @@ function consumeSuppressedTemplateEvent(event) {
   event.stopPropagation?.();
   event.stopImmediatePropagation?.();
 
-  if (event.type === "click") {
-    suppressNextMainTemplateInteraction = false;
-  }
+  if (event.type === "click") scheduleMainTemplateSuppressionClear();
 }
 
 function escapeHtml(value) {
@@ -1071,6 +1084,7 @@ export class PlayerDisplay extends Application {
 
     await canvas.scene.createEmbeddedDocuments("MeasuredTemplate", [templateData]);
     canvas.templates.clearPreviewContainer?.();
+    clearNativeTemplatePreview(preview);
     this.pendingTemplateData = null;
     this.pendingTemplateScreenPoint = null;
     suppressMainTemplatePlacementFor();
