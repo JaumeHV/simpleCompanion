@@ -16,7 +16,6 @@ const ACTIVE_TEMPLATE_FILL = "rgba(86, 142, 255, 0.18)";
 const ACTIVE_TEMPLATE_BORDER = "rgba(123, 174, 255, 0.72)";
 const VIEWPORT_ZOOM_MIN = 0.6;
 const VIEWPORT_ZOOM_MAX = 1.8;
-const VIEWPORT_ZOOM_STEP = 0.1;
 const TOKEN_RING_COLORS = {
   hostile: "#9e3834",
   friendly: "#317a33",
@@ -401,7 +400,8 @@ export class PlayerDisplay extends Application {
     this.pendingTemplateData = null;
     this.pendingTemplateScreenPoint = null;
     this.pendingTemplateIconPath = null;
-    this.viewportZoom = 1;
+    this.viewportGridCount = Math.round(VIEWPORT_SIZE / GRID_PIXELS);
+    this.viewportZoom = this.getViewportZoomForGridCount(this.viewportGridCount);
     this.templateCaptureInterval = null;
     this.isTemplateRotationDragging = false;
     this.templateRotationPointerId = null;
@@ -629,8 +629,19 @@ export class PlayerDisplay extends Application {
   }
 
   getViewportVisibleGridCount() {
-    const count = VIEWPORT_SIZE / this.getViewportGridPixels();
-    return Math.max(3, Math.round(count));
+    return this.viewportGridCount;
+  }
+
+  getViewportMinGridCount() {
+    return Math.ceil(VIEWPORT_SIZE / (GRID_PIXELS * VIEWPORT_ZOOM_MAX));
+  }
+
+  getViewportMaxGridCount() {
+    return Math.floor(VIEWPORT_SIZE / (GRID_PIXELS * VIEWPORT_ZOOM_MIN));
+  }
+
+  getViewportZoomForGridCount(gridCount) {
+    return VIEWPORT_SIZE / (GRID_PIXELS * gridCount);
   }
 
   buildTemplateHighlightHtml(templateData, point) {
@@ -1246,9 +1257,9 @@ export class PlayerDisplay extends Application {
       await game.combat?.nextTurn();
       this.refresh();
     } else if (target.dataset.companionZoomIn !== undefined) {
-      this.adjustViewportZoom(VIEWPORT_ZOOM_STEP);
+      this.adjustViewportGridCount(-1);
     } else if (target.dataset.companionZoomOut !== undefined) {
-      this.adjustViewportZoom(-VIEWPORT_ZOOM_STEP);
+      this.adjustViewportGridCount(1);
     } else if (target.dataset.companionTemplateConfirm !== undefined) {
       await this.confirmTemplatePlacement(event);
     } else if (target.dataset.companionTemplateCancel !== undefined) {
@@ -1256,10 +1267,14 @@ export class PlayerDisplay extends Application {
     }
   }
 
-  adjustViewportZoom(delta) {
-    const nextZoom = Math.min(VIEWPORT_ZOOM_MAX, Math.max(VIEWPORT_ZOOM_MIN, this.viewportZoom + delta));
-    if (nextZoom === this.viewportZoom) return;
-    this.viewportZoom = Math.round(nextZoom * 100) / 100;
+  adjustViewportGridCount(deltaTiles) {
+    const minCount = this.getViewportMinGridCount();
+    const maxCount = this.getViewportMaxGridCount();
+    const nextCount = Math.min(maxCount, Math.max(minCount, this.viewportGridCount + deltaTiles));
+    if (nextCount === this.viewportGridCount) return;
+
+    this.viewportGridCount = nextCount;
+    this.viewportZoom = this.getViewportZoomForGridCount(this.viewportGridCount);
     this.refresh();
   }
 
