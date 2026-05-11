@@ -37,8 +37,19 @@ export const activeDisplays = {};
 
 let canvasTemplatePlacementGuardInstalled = false;
 let measuredTemplatePreviewGuardInstalled = false;
-let suppressNextMainTemplatePlacement = false;
+let suppressMainTemplatePlacementUntil = 0;
 const patchedTemplateLayers = new WeakSet();
+
+function shouldSuppressMainTemplatePlacement() {
+  return Date.now() < suppressMainTemplatePlacementUntil;
+}
+
+function suppressMainTemplatePlacementFor(durationMs = 500) {
+  suppressMainTemplatePlacementUntil = Math.max(
+    suppressMainTemplatePlacementUntil,
+    Date.now() + durationMs
+  );
+}
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (character) => ({
@@ -191,8 +202,7 @@ function isPrimaryPointerEvent(event) {
 function blockMainCanvasTemplatePlacement(event) {
   if (!hasActiveDisplay() || !isPrimaryPointerEvent(event)) return;
 
-  if (suppressNextMainTemplatePlacement) {
-    suppressNextMainTemplatePlacement = false;
+  if (shouldSuppressMainTemplatePlacement()) {
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation?.();
@@ -226,8 +236,7 @@ function installTemplateLayerPlacementGuard() {
     if (typeof originalMethod !== "function") continue;
 
     templateLayer[methodName] = function simpleCompanionTemplatePlacementGuard(event, ...args) {
-      if (suppressNextMainTemplatePlacement) {
-        suppressNextMainTemplatePlacement = false;
+      if (shouldSuppressMainTemplatePlacement()) {
         event?.preventDefault?.();
         event?.stopPropagation?.();
         return false;
@@ -1053,7 +1062,7 @@ export class PlayerDisplay extends Application {
     canvas.templates.clearPreviewContainer?.();
     this.pendingTemplateData = null;
     this.pendingTemplateScreenPoint = null;
-    suppressNextMainTemplatePlacement = true;
+    suppressMainTemplatePlacementFor();
     this.refresh();
   }
 
