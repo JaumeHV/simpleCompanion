@@ -14,6 +14,9 @@ const TEMPLATE_HIGHLIGHT_BORDER = "rgba(148,197,255,0.72)";
 const TEMPLATE_PREVIEW_COLOR = "#6aa8ff";
 const ACTIVE_TEMPLATE_FILL = "rgba(86, 142, 255, 0.18)";
 const ACTIVE_TEMPLATE_BORDER = "rgba(123, 174, 255, 0.72)";
+const VIEWPORT_ZOOM_MIN = 0.6;
+const VIEWPORT_ZOOM_MAX = 1.8;
+const VIEWPORT_ZOOM_STEP = 0.1;
 const TOKEN_RING_COLORS = {
   hostile: "#9e3834",
   friendly: "#317a33",
@@ -291,7 +294,7 @@ function isPrimaryPointerEvent(event) {
 }
 
 function isTemplateActionTarget(event) {
-  return Boolean(event?.target?.closest?.("[data-companion-template-confirm], [data-companion-template-cancel], [data-companion-template-rotate-handle]"));
+  return Boolean(event?.target?.closest?.("[data-companion-template-confirm], [data-companion-template-cancel], [data-companion-template-rotate-handle], [data-companion-zoom-in], [data-companion-zoom-out]"));
 }
 
 function blockMainCanvasTemplatePlacement(event) {
@@ -380,6 +383,8 @@ const COMPANION_BUTTON_SELECTOR = [
   "[data-companion-open-chat]",
   "[data-companion-roll-initiative]",
   "[data-companion-end-turn]",
+  "[data-companion-zoom-in]",
+  "[data-companion-zoom-out]",
   "[data-companion-template-confirm]",
   "[data-companion-template-cancel]",
   "[data-companion-template-rotate-handle]"
@@ -396,6 +401,7 @@ export class PlayerDisplay extends Application {
     this.pendingTemplateData = null;
     this.pendingTemplateScreenPoint = null;
     this.pendingTemplateIconPath = null;
+    this.viewportZoom = 1;
     this.templateCaptureInterval = null;
     this.isTemplateRotationDragging = false;
     this.templateRotationPointerId = null;
@@ -724,6 +730,8 @@ export class PlayerDisplay extends Application {
 
     const templatePreviewHtml = this.buildTemplatePreviewHtml();
 
+    const zoomPercent = Math.round(this.viewportZoom * 100);
+
     return `
       <div style="
         position: relative;
@@ -734,10 +742,17 @@ export class PlayerDisplay extends Application {
         border: 2px solid #777;
         overflow: hidden;
       " id="simple-companion-viewport-${this.displayIndex}">
-        ${grid}
-        ${activeTemplatesHtml}
-        ${tokensHtml}
-        ${templatePreviewHtml}
+        <div style="
+          position:absolute;
+          inset:0;
+          transform:scale(${this.viewportZoom});
+          transform-origin:50% 50%;
+        ">
+          ${grid}
+          ${activeTemplatesHtml}
+          ${tokensHtml}
+          ${templatePreviewHtml}
+        </div>
 
         <div style="
           position:absolute;
@@ -751,6 +766,44 @@ export class PlayerDisplay extends Application {
           z-index: 30;
         ">
           5 ft
+        </div>
+
+        <div style="
+          position:absolute;
+          right:10px;
+          bottom:10px;
+          display:flex;
+          align-items:center;
+          gap:6px;
+          z-index:30;
+          background:rgba(0,0,0,0.55);
+          border:1px solid rgba(255,255,255,0.2);
+          border-radius:12px;
+          padding:6px;
+        ">
+          <button type="button" data-companion-zoom-out style="
+            width:44px;
+            height:44px;
+            border-radius:10px;
+            border:1px solid rgba(255,255,255,0.28);
+            background:rgba(19,29,47,0.78);
+            color:#fff;
+            font-size:24px;
+            line-height:1;
+            cursor:pointer;
+          ">-</button>
+          <div style="min-width:48px; text-align:center; color:#fff; font-size:12px; font-weight:700;">${zoomPercent}%</div>
+          <button type="button" data-companion-zoom-in style="
+            width:44px;
+            height:44px;
+            border-radius:10px;
+            border:1px solid rgba(255,255,255,0.28);
+            background:rgba(19,29,47,0.78);
+            color:#fff;
+            font-size:24px;
+            line-height:1;
+            cursor:pointer;
+          ">+</button>
         </div>
       </div>
     `;
@@ -1179,11 +1232,22 @@ export class PlayerDisplay extends Application {
 
       await game.combat?.nextTurn();
       this.refresh();
+    } else if (target.dataset.companionZoomIn !== undefined) {
+      this.adjustViewportZoom(VIEWPORT_ZOOM_STEP);
+    } else if (target.dataset.companionZoomOut !== undefined) {
+      this.adjustViewportZoom(-VIEWPORT_ZOOM_STEP);
     } else if (target.dataset.companionTemplateConfirm !== undefined) {
       await this.confirmTemplatePlacement(event);
     } else if (target.dataset.companionTemplateCancel !== undefined) {
       this.cancelTemplatePlacement(event);
     }
+  }
+
+  adjustViewportZoom(delta) {
+    const nextZoom = Math.min(VIEWPORT_ZOOM_MAX, Math.max(VIEWPORT_ZOOM_MIN, this.viewportZoom + delta));
+    if (nextZoom === this.viewportZoom) return;
+    this.viewportZoom = Math.round(nextZoom * 100) / 100;
+    this.refresh();
   }
 
   startTemplateRotationDrag(event) {
@@ -1258,10 +1322,18 @@ export class PlayerDisplay extends Application {
 
     const rect = viewport.getBoundingClientRect();
 
-    return snapViewportPointToHalfGrid({
+    const rawPoint = {
       x: ((event.clientX - rect.left) / rect.width) * VIEWPORT_SIZE,
       y: ((event.clientY - rect.top) / rect.height) * VIEWPORT_SIZE
-    });
+    };
+
+    const center = VIEWPORT_SIZE / 2;
+    const unscaledPoint = {
+      x: center + (rawPoint.x - center) / this.viewportZoom,
+      y: center + (rawPoint.y - center) / this.viewportZoom
+    };
+
+    return snapViewportPointToHalfGrid(unscaledPoint);
   }
 
   updateTemplatePreviewOverlay() {
