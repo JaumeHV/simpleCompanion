@@ -144,6 +144,27 @@ function isTokenHidden(token) {
   return Boolean(token.document?.hidden ?? token.hidden);
 }
 
+function isScenePointExplored(point) {
+  if (!canvas.sight?.exploration) return true;
+  try {
+    return canvas.sight.testVisibility(point, { tolerance: 2 });
+  } catch {
+    return true;
+  }
+}
+
+function isWallRelevant(wall) {
+  const c = wall.document.c;
+  if (!c?.length) return false;
+
+  const midX = (c[0] + c[2]) / 2;
+  const midY = (c[1] + c[3]) / 2;
+
+  return isScenePointExplored({ x: midX, y: midY })
+    || isScenePointExplored({ x: c[0], y: c[1] })
+    || isScenePointExplored({ x: c[2], y: c[3] });
+}
+
 function getTokenRingColor(token) {
   const disposition = token.document?.disposition ?? token.disposition;
   if (disposition < 0) return TOKEN_RING_COLORS.hostile;
@@ -1274,6 +1295,8 @@ export class PlayerDisplay extends Application {
           (y1 < bounds.top && y2 < bounds.top) || (y1 > bounds.bottom && y2 > bounds.bottom)) {
         continue;
       }
+
+      if (!isWallRelevant(wall)) continue;
 
       const dx = x2 - x1;
       const dy = y2 - y1;
