@@ -224,8 +224,16 @@ function isFogPointExplored(userId, sceneX, sceneY) {
 function getDisplayUserId(display) {
   const actor = display.getActor();
   if (!actor) return null;
-  const user = game.users.find(u => u.character?.id === actor.id);
-  return user?.id ?? null;
+
+  const ownership = actor.ownership || {};
+  for (const [userId, level] of Object.entries(ownership)) {
+    if (userId === "default") continue;
+    const user = game.users.get(userId);
+    if (!user || user.isGM) continue;
+    if (level >= CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER) return userId;
+  }
+
+  return null;
 }
 
 function isWallRelevant(wall, display) {
@@ -233,20 +241,11 @@ function isWallRelevant(wall, display) {
   if (!c?.length) return false;
 
   const userId = display ? getDisplayUserId(display) : null;
-  if (!userId) {
-    console.log("simpleCompanion: no userId for display, showing wall");
-    return true;
-  }
+  if (!userId) return true;
 
   const fogEntry = getFogDataForUser(userId);
-  if (!fogEntry.exists) {
-    console.log("simpleCompanion: no fogDoc for user", userId, ", showing wall");
-    return true;
-  }
-  if (!fogEntry.imageData) {
-    console.log("simpleCompanion: no imageData for user", userId, ", hiding wall");
-    return false;
-  }
+  if (!fogEntry.exists) return true;
+  if (!fogEntry.imageData) return false;
 
   const points = [
     { x: (c[0] + c[2]) / 2, y: (c[1] + c[3]) / 2 },
