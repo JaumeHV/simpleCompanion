@@ -1055,7 +1055,6 @@ export class PlayerDisplay extends Application {
     }
 
     const canRoll = combat.canUserModify(game.user, "update");
-    const sceneName = escapeHtml(getSceneNameForCombat(combat));
     const round = escapeHtml(combat.round ?? "-");
     const turn = escapeHtml((combat.turn ?? 0) + 1);
     const activeCombatantId = combat.combatant?.id;
@@ -1105,9 +1104,8 @@ export class PlayerDisplay extends Application {
     return `
       <section>
         <div style="padding:10px 12px; background:#181b22; border-bottom:1px solid #3a3f49;">
-          <div style="display:flex; justify-content:space-between; gap:8px; color:#fff;">
-            <strong style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${sceneName}</strong>
-            <span style="color:#c4cad5;">Round ${round} | Turn ${turn}</span>
+          <div style="display:flex; justify-content:flex-end; gap:8px; color:#c4cad5;">
+            <span>Round ${round} | Turn ${turn}</span>
           </div>
         </div>
         ${combatantsHtml || `<div style="padding:10px 12px; color:#aaa;">No combatants.</div>`}
