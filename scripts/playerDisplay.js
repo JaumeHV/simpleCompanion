@@ -524,7 +524,7 @@ export class PlayerDisplay extends Application {
     this.pendingTemplateData = null;
     this.pendingTemplateScreenPoint = null;
     this.pendingTemplateIconPath = null;
-    this.viewportGridCount = Math.round(VIEWPORT_SIZE / GRID_PIXELS);
+    this.viewportGridCount = 9;
     this.viewportZoom = this.getViewportZoomForGridCount(this.viewportGridCount);
     this.templateCaptureInterval = null;
     this.isTemplateRotationDragging = false;
@@ -758,11 +758,13 @@ export class PlayerDisplay extends Application {
   }
 
   getViewportMinGridCount() {
-    return Math.ceil(VIEWPORT_SIZE / (GRID_PIXELS * VIEWPORT_ZOOM_MAX));
+    const min = Math.ceil(VIEWPORT_SIZE / (GRID_PIXELS * VIEWPORT_ZOOM_MAX));
+    return min % 2 === 0 ? min + 1 : min;
   }
 
   getViewportMaxGridCount() {
-    return Math.floor(VIEWPORT_SIZE / (GRID_PIXELS * VIEWPORT_ZOOM_MIN));
+    const max = Math.floor(VIEWPORT_SIZE / (GRID_PIXELS * VIEWPORT_ZOOM_MIN));
+    return max % 2 === 0 ? max - 1 : max;
   }
 
   getViewportZoomForGridCount(gridCount) {
@@ -1482,9 +1484,12 @@ export class PlayerDisplay extends Application {
   adjustViewportGridCount(deltaTiles) {
     const minCount = this.getViewportMinGridCount();
     const maxCount = this.getViewportMaxGridCount();
-    const nextCount = Math.min(maxCount, Math.max(minCount, this.viewportGridCount + deltaTiles));
+    let nextCount = Math.min(maxCount, Math.max(minCount, this.viewportGridCount + deltaTiles));
     if (nextCount === this.viewportGridCount) return;
-
+    // Keep odd grid count so cells align with viewport edges
+    if (nextCount % 2 === 0) nextCount += deltaTiles;
+    nextCount = Math.min(maxCount, Math.max(minCount, nextCount));
+    if (nextCount === this.viewportGridCount) return;
     this.viewportGridCount = nextCount;
     this.viewportZoom = this.getViewportZoomForGridCount(this.viewportGridCount);
     this.refresh();
