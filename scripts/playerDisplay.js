@@ -477,22 +477,23 @@ export class PlayerDisplay extends Application {
     const centerX = VIEWPORT_SIZE / 2;
     const centerY = VIEWPORT_SIZE / 2;
     const gridPixels = this.getViewportGridPixels();
+    const halfGridPixels = gridPixels / 2;
 
     // Vertical lines
-    for (let x = centerX; x >= 0; x -= gridPixels) {
+    for (let x = centerX - halfGridPixels; x >= 0; x -= gridPixels) {
       grid += `<div style="position:absolute;left:${x}px;top:0;width:1px;height:${VIEWPORT_SIZE}px;background:${GRID_COLOR};z-index:1;"></div>`;
     }
 
-    for (let x = centerX + gridPixels; x < VIEWPORT_SIZE; x += gridPixels) {
+    for (let x = centerX + halfGridPixels; x < VIEWPORT_SIZE; x += gridPixels) {
       grid += `<div style="position:absolute;left:${x}px;top:0;width:1px;height:${VIEWPORT_SIZE}px;background:${GRID_COLOR};z-index:1;"></div>`;
     }
 
     // Horizontal lines
-    for (let y = centerY; y >= 0; y -= gridPixels) {
+    for (let y = centerY - halfGridPixels; y >= 0; y -= gridPixels) {
       grid += `<div style="position:absolute;left:0;top:${y}px;width:${VIEWPORT_SIZE}px;height:1px;background:${GRID_COLOR};z-index:1;"></div>`;
     }
 
-    for (let y = centerY + gridPixels; y < VIEWPORT_SIZE; y += gridPixels) {
+    for (let y = centerY + halfGridPixels; y < VIEWPORT_SIZE; y += gridPixels) {
       grid += `<div style="position:absolute;left:0;top:${y}px;width:${VIEWPORT_SIZE}px;height:1px;background:${GRID_COLOR};z-index:1;"></div>`;
     }
 
@@ -668,8 +669,8 @@ export class PlayerDisplay extends Application {
     const affectedCells = [];
     const gridPixels = this.getViewportGridPixels();
 
-    for (let y = 0; y <= VIEWPORT_SIZE; y += gridPixels) {
-      for (let x = 0; x <= VIEWPORT_SIZE; x += gridPixels) {
+    for (let y = 0; y < VIEWPORT_SIZE; y += gridPixels) {
+      for (let x = 0; x < VIEWPORT_SIZE; x += gridPixels) {
         if (this.isTemplateAffectingPoint(templateData, point, { x, y })) {
           affectedCells.push({ x, y });
         }
