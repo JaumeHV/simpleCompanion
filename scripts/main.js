@@ -1,5 +1,5 @@
 import { registerSettings } from "./settings.js";
-import { PlayerDisplay, activeDisplays, consumeSuppressedMeasuredTemplateCreate } from "./playerDisplay.js";
+import { PlayerDisplay, activeDisplays, consumeSuppressedMeasuredTemplateCreate, clearFogCache } from "./playerDisplay.js";
 
 const MODULE_ID = "simple-companion";
 
@@ -150,6 +150,23 @@ Hooks.on("updateWall", () => {
 });
 
 Hooks.on("deleteWall", () => {
+  refreshAllDisplays();
+});
+
+Hooks.on("updateFogExploration", () => {
+  refreshAllDisplays();
+});
+
+Hooks.on("sightRefresh", () => {
+  refreshAllDisplays();
+});
+
+Hooks.on("canvasReady", () => {
+  clearFogCache();
+  refreshAllDisplays();
+});
+
+Hooks.on("simpleCompanionFogLoaded", () => {
   refreshAllDisplays();
 });
 

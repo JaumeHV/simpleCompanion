@@ -69,6 +69,10 @@ export function consumeSuppressedMeasuredTemplateCreate() {
   return true;
 }
 
+export function clearFogCache() {
+  fogDataCache.clear();
+}
+
 function shouldSuppressMainTemplatePlacement() {
   if (suppressNextMainTemplateInteraction && Date.now() >= suppressMainTemplatePlacementUntil) {
     suppressNextMainTemplateInteraction = false;
@@ -144,25 +148,108 @@ function isTokenHidden(token) {
   return Boolean(token.document?.hidden ?? token.hidden);
 }
 
-function isScenePointExplored(point) {
-  if (!canvas.sight?.exploration) return true;
-  try {
-    return canvas.sight.testVisibility(point, { tolerance: 2 });
-  } catch {
-    return true;
+const fogDataCache = new Map();
+
+function getFogDataForUser(userId) {
+  if (!userId) return { exists: false };
+
+  const cached = fogDataCache.get(userId);
+  const fogDoc = canvas.scene?.fogExplorations?.get(userId);
+
+  if (!fogDoc) {
+    if (!cached) fogDataCache.set(userId, { exists: false });
+    return { exists: false };
   }
+
+  if (!fogDoc.explored) {
+    if (!cached || cached.exploredKey !== null) fogDataCache.set(userId, { exists: true, imageData: null, exploredKey: null });
+    return { exists: true, imageData: null };
+  }
+
+  if (cached?.exploredKey === fogDoc.explored) return cached;
+
+  const entry = {
+    exists: true,
+    exploredKey: fogDoc.explored,
+    imageData: cached?.imageData || null,
+    canvas: cached?.canvas || null,
+    refreshing: true
+  };
+  fogDataCache.set(userId, entry);
+
+  const img = new Image();
+  const fogCanvas = document.createElement("canvas");
+  const fogCtx = fogCanvas.getContext("2d");
+
+  img.onload = () => {
+    fogCanvas.width = img.width;
+    fogCanvas.height = img.height;
+    fogCtx.clearRect(0, 0, fogCanvas.width, fogCanvas.height);
+    fogCtx.drawImage(img, 0, 0);
+    entry.imageData = fogCtx.getImageData(0, 0, fogCanvas.width, fogCanvas.height);
+    entry.canvas = fogCanvas;
+    entry.refreshing = false;
+    Hooks.callAll("simpleCompanionFogLoaded", userId);
+  };
+  img.onerror = () => { entry.refreshing = false; };
+  img.src = `data:image/webp;base64,${fogDoc.explored}`;
+
+  return entry;
 }
 
-function isWallRelevant(wall) {
+function isFogPointExplored(userId, sceneX, sceneY) {
+  const entry = fogDataCache.get(userId);
+  if (!entry || !entry.imageData || !entry.canvas) return false;
+
+  const dims = canvas.dimensions;
+  if (!dims) return false;
+
+  const scenePixelW = dims.sceneWidth ?? (canvas.scene?.width ?? 0) * (canvas.grid?.size ?? 0);
+  const scenePixelH = dims.sceneHeight ?? (canvas.scene?.height ?? 0) * (canvas.grid?.size ?? 0);
+  const offsetX = dims.sceneX ?? 0;
+  const offsetY = dims.sceneY ?? 0;
+  if (!scenePixelW || !scenePixelH) return false;
+
+  const ratioX = entry.canvas.width / scenePixelW;
+  const ratioY = entry.canvas.height / scenePixelH;
+  const px = Math.round((sceneX - offsetX) * ratioX);
+  const py = Math.round((sceneY - offsetY) * ratioY);
+
+  if (px < 0 || py < 0 || px >= entry.canvas.width || py >= entry.canvas.height) return false;
+
+  const idx = (py * entry.canvas.width + px) * 4;
+  return entry.imageData.data[idx + 3] > 30;
+}
+
+function getDisplayUserId(display) {
+  const actor = display.getActor();
+  if (!actor) return null;
+  const user = game.users.find(u => u.character?.id === actor.id);
+  return user?.id ?? null;
+}
+
+function isWallRelevant(wall, display) {
   const c = wall.document.c;
   if (!c?.length) return false;
 
-  const midX = (c[0] + c[2]) / 2;
-  const midY = (c[1] + c[3]) / 2;
+  const userId = display ? getDisplayUserId(display) : null;
+  if (!userId) return true;
 
-  return isScenePointExplored({ x: midX, y: midY })
-    || isScenePointExplored({ x: c[0], y: c[1] })
-    || isScenePointExplored({ x: c[2], y: c[3] });
+  const fogEntry = getFogDataForUser(userId);
+  if (!fogEntry.exists) return true;
+  if (!fogEntry.imageData) return false;
+
+  const points = [
+    { x: (c[0] + c[2]) / 2, y: (c[1] + c[3]) / 2 },
+    { x: c[0], y: c[1] },
+    { x: c[2], y: c[3] }
+  ];
+
+  for (const point of points) {
+    if (isFogPointExplored(userId, point.x, point.y)) return true;
+  }
+
+  return false;
 }
 
 function getTokenRingColor(token) {
@@ -1296,7 +1383,7 @@ export class PlayerDisplay extends Application {
         continue;
       }
 
-      if (!isWallRelevant(wall)) continue;
+      if (!isWallRelevant(wall, this)) continue;
 
       const dx = x2 - x1;
       const dy = y2 - y1;
