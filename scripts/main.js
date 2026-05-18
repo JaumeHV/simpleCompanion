@@ -141,6 +141,18 @@ Hooks.on("deleteCombatant", () => {
   refreshAllDisplays();
 });
 
+Hooks.on("createWall", () => {
+  refreshAllDisplays();
+});
+
+Hooks.on("updateWall", () => {
+  refreshAllDisplays();
+});
+
+Hooks.on("deleteWall", () => {
+  refreshAllDisplays();
+});
+
 Hooks.on("getSceneControlButtons", (controls) => {
   const simpleCompanionControl = {
     name: "simple-companion",

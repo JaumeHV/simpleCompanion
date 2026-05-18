@@ -21,6 +21,14 @@ const TOKEN_RING_COLORS = {
   friendly: "#317a33",
   neutral: "#818386"
 };
+const WALL_COLORS = {
+  sight: "rgba(186, 140, 255, 0.5)",
+  sound: "rgba(140, 200, 255, 0.5)",
+  move: "rgba(255, 140, 140, 0.5)",
+  light: "rgba(255, 220, 100, 0.5)",
+  default: "rgba(160, 160, 180, 0.45)"
+};
+
 const BLOCKED_TEMPLATE_PLACEMENT_EVENTS = ["pointerdown", "pointerup", "mousedown", "mouseup", "click"];
 const BLOCKED_TEMPLATE_LAYER_METHODS = [
   "_onClickLeft",
@@ -731,6 +739,7 @@ export class PlayerDisplay extends Application {
     const tokenCanvasCenter = getTokenCanvasCenter(token, gridSize);
 
     const grid = this.buildGridHtml();
+    const wallsHtml = this.buildWallsHtml(tokenCanvasCenter, gridSize);
     let tokensHtml = "";
     const activeTemplatesHtml = this.buildActiveTemplatesHtml(tokenCanvasCenter, gridSize);
 
@@ -774,6 +783,7 @@ export class PlayerDisplay extends Application {
         overflow: hidden;
       " id="simple-companion-viewport-${this.displayIndex}">
         ${grid}
+        ${wallsHtml}
         ${activeTemplatesHtml}
         ${tokensHtml}
         ${templatePreviewHtml}
@@ -1228,6 +1238,84 @@ export class PlayerDisplay extends Application {
           <img src="${iconPath}" style="width:100%;height:100%;object-fit:cover;">
         </div>
       `);
+    }
+
+    return elements.join("");
+  }
+
+  buildWallsHtml(tokenCanvasCenter, gridSize) {
+    const walls = canvas.walls?.placeables;
+    if (!walls?.length) return "";
+
+    const centerX = VIEWPORT_SIZE / 2;
+    const centerY = VIEWPORT_SIZE / 2;
+    const gridPixels = this.getViewportGridPixels();
+
+    const margin = VIEWPORT_SIZE * 0.3;
+    const bounds = {
+      left: -margin,
+      right: VIEWPORT_SIZE + margin,
+      top: -margin,
+      bottom: VIEWPORT_SIZE + margin
+    };
+
+    const elements = [];
+
+    for (const wall of walls) {
+      const c = wall.document.c;
+      if (!c?.length) continue;
+
+      const x1 = centerX + ((c[0] - tokenCanvasCenter.x) / gridSize) * gridPixels;
+      const y1 = centerY + ((c[1] - tokenCanvasCenter.y) / gridSize) * gridPixels;
+      const x2 = centerX + ((c[2] - tokenCanvasCenter.x) / gridSize) * gridPixels;
+      const y2 = centerY + ((c[3] - tokenCanvasCenter.y) / gridSize) * gridPixels;
+
+      if ((x1 < bounds.left && x2 < bounds.left) || (x1 > bounds.right && x2 > bounds.right) ||
+          (y1 < bounds.top && y2 < bounds.top) || (y1 > bounds.bottom && y2 > bounds.bottom)) {
+        continue;
+      }
+
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const length = Math.hypot(dx, dy);
+      const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+
+      const door = wall.document.door;
+      const doorState = wall.document.ds;
+      const isDoor = door > 0;
+      const isSecretDoor = door === 2;
+      const isSecretDiscovered = isSecretDoor && doorState !== 0;
+
+      let color = WALL_COLORS.default;
+      if (wall.document.sight >= 1) color = WALL_COLORS.sight;
+      else if (wall.document.move >= 1) color = WALL_COLORS.move;
+      else if (wall.document.light >= 1) color = WALL_COLORS.light;
+      else if (wall.document.sound) color = WALL_COLORS.sound;
+
+      if (isSecretDoor && !isSecretDiscovered) {
+        elements.push(`<div style="position:absolute;left:${x1}px;top:${y1}px;width:${length}px;height:3px;transform-origin:0 50%;transform:rotate(${angle}deg);background:${color};pointer-events:none;z-index:5;"></div>`);
+      } else if (isSecretDiscovered) {
+        elements.push(`<div style="position:absolute;left:${x1}px;top:${y1}px;width:${length}px;height:3px;transform-origin:0 50%;transform:rotate(${angle}deg);background:repeating-linear-gradient(90deg,${color},${color} 6px,transparent 6px,transparent 12px);pointer-events:none;z-index:5;"></div>`);
+      } else if (isDoor) {
+        const gap = 10;
+        const halfLen = (length - gap) / 2;
+        const ratio1 = halfLen / length;
+        const ratio2 = (halfLen + gap) / length;
+
+        const mx1 = x1 + dx * ratio1;
+        const my1 = y1 + dy * ratio1;
+        const mx2 = x1 + dx * ratio2;
+        const my2 = y1 + dy * ratio2;
+
+        const doorColor = door === 1 ? "rgba(120, 200, 120, 0.6)" : "rgba(200, 180, 80, 0.6)";
+
+        elements.push(`<div style="position:absolute;left:${x1}px;top:${y1}px;width:${halfLen}px;height:3px;transform-origin:0 50%;transform:rotate(${angle}deg);background:${color};pointer-events:none;z-index:5;"></div>`);
+        elements.push(`<div style="position:absolute;left:${mx2}px;top:${my2}px;width:${halfLen}px;height:3px;transform-origin:0 50%;transform:rotate(${angle}deg);background:${color};pointer-events:none;z-index:5;"></div>`);
+        elements.push(`<div style="position:absolute;left:${mx1 - 3}px;top:${my1 - 3}px;width:6px;height:6px;border-radius:50%;background:${doorColor};pointer-events:none;z-index:5;"></div>`);
+        elements.push(`<div style="position:absolute;left:${mx2 - 3}px;top:${my2 - 3}px;width:6px;height:6px;border-radius:50%;background:${doorColor};pointer-events:none;z-index:5;"></div>`);
+      } else {
+        elements.push(`<div style="position:absolute;left:${x1}px;top:${y1}px;width:${length}px;height:3px;transform-origin:0 50%;transform:rotate(${angle}deg);background:${color};pointer-events:none;z-index:5;"></div>`);
+      }
     }
 
     return elements.join("");
