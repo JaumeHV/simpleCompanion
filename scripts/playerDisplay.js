@@ -1066,29 +1066,36 @@ export class PlayerDisplay extends Application {
       const isAssigned = this.isAssignedCombatant(combatant);
       const name = escapeHtml(combatant.name);
       const initiative = combatant.initiative ?? "-";
-      const initiativeHtml = combatant.initiative == null && canRoll && isAssigned
+
+      const tokenImg = combatant.token?.texture?.src || combatant.token?.img || combatant.actor?.img || "";
+
+      const needsRoll = combatant.initiative == null && canRoll && isAssigned;
+      const rollBtn = needsRoll
         ? `<button type="button" data-companion-roll-initiative="${combatant.id}" title="Roll Initiative" style="
-            width:34px;
+            width:32px;
             height:28px;
             border:1px solid #656d7c;
             background:#273140;
             color:#fff;
             cursor:pointer;
+            font-size:13px;
           "><i class="fas fa-dice-d20"></i></button>`
-        : `<div style="width:34px; color:#c4cad5; text-align:right;">${escapeHtml(initiative)}</div>`;
+        : "";
 
       return `
         <div style="
           display:flex;
           align-items:center;
-          gap:8px;
-          padding:8px 10px;
+          gap:6px;
+          padding:6px 10px;
           background:${isTurn ? "rgba(190, 130, 45, 0.28)" : "rgba(255,255,255,0.04)"};
           border-bottom:1px solid rgba(255,255,255,0.07);
         ">
-          ${initiativeHtml}
-          <div style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${name}</div>
-          <div style="width:18px; text-align:center; color:${isTurn ? "#f3c16b" : "#6f7785"};">
+          <div style="width:28px; color:#c4cad5; text-align:right; font-size:13px;">${escapeHtml(initiative)}</div>
+          ${tokenImg ? `<img src="${tokenImg}" style="width:24px;height:24px;border-radius:3px;flex-shrink:0;">` : ""}
+          <div style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14px;">${name}</div>
+          ${rollBtn}
+          <div style="width:18px; text-align:center; color:${isTurn ? "#f3c16b" : "transparent"};">
             ${isTurn ? `<i class="fas fa-arrow-right"></i>` : ""}
           </div>
         </div>
