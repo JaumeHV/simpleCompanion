@@ -233,11 +233,20 @@ function isWallRelevant(wall, display) {
   if (!c?.length) return false;
 
   const userId = display ? getDisplayUserId(display) : null;
-  if (!userId) return true;
+  if (!userId) {
+    console.log("simpleCompanion: no userId for display, showing wall");
+    return true;
+  }
 
   const fogEntry = getFogDataForUser(userId);
-  if (!fogEntry.exists) return true;
-  if (!fogEntry.imageData) return false;
+  if (!fogEntry.exists) {
+    console.log("simpleCompanion: no fogDoc for user", userId, ", showing wall");
+    return true;
+  }
+  if (!fogEntry.imageData) {
+    console.log("simpleCompanion: no imageData for user", userId, ", hiding wall");
+    return false;
+  }
 
   const points = [
     { x: (c[0] + c[2]) / 2, y: (c[1] + c[3]) / 2 },
