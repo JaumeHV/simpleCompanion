@@ -1,15 +1,5 @@
 const MODULE_ID = "simple-companion";
 
-// ---------------------------------------------------------------------------
-// Foundry version detection
-// ---------------------------------------------------------------------------
-function isV14() {
-  try {
-    return Number(game?.release?.generation ?? 14) >= 14;
-  } catch { return true; }
-}
-
-// Viewport constants
 const VIEWPORT_SIZE = 720;
 const GRID_PIXELS = 72;
 const HALF_GRID_PIXELS = GRID_PIXELS / 2;
@@ -17,7 +7,6 @@ const GRID_COLOR = "#333";
 const TOKEN_FOOTPRINT_PADDING = 4;
 const SIDE_PANEL_WIDTH = 420;
 const SIDE_PANEL_HEIGHT = 720;
-const TEMPLATE_CAPTURE_INTERVAL = 100;
 const TEMPLATE_HIGHLIGHT_COLOR = "rgba(106,168,255,0.34)";
 const TEMPLATE_HIGHLIGHT_BORDER = "rgba(148,197,255,0.72)";
 const TEMPLATE_PREVIEW_COLOR = "#6aa8ff";
@@ -38,91 +27,22 @@ const WALL_COLORS = {
   default: "rgba(160, 160, 180, 0.45)"
 };
 
-const BLOCKED_TEMPLATE_PLACEMENT_EVENTS = ["pointerdown", "pointerup", "mousedown", "mouseup", "click"];
-const BLOCKED_TEMPLATE_LAYER_METHODS = [
-  "_onClickLeft",
-  "_onDragLeftStart",
-  "_onDragLeftMove",
-  "_onDragLeftDrop",
-  "_onUnclickLeft"
-];
-const BLOCKED_TEMPLATE_PREVIEW_METHODS = [
-  "_onClickLeft",
-  "_onDragLeftStart",
-  "_onDragLeftMove",
-  "_onDragLeftDrop",
-  "_onUnclickLeft"
-];
+const BLOCKED_CANVAS_EVENTS = ["pointerdown", "pointerup", "mousedown", "mouseup", "click"];
 
 export const activeDisplays = {};
 
-let canvasTemplatePlacementGuardInstalled = false;
-let measuredTemplatePreviewGuardInstalled = false;
-let suppressNextMainTemplateInteraction = false;
-let suppressMainTemplatePlacementUntil = 0;
-let suppressMainTemplatePlacementClearTimer = null;
-let suppressedTemplateLayerClicksRemaining = 0;
-let suppressedMeasuredTemplateCreatesRemaining = 0;
-const patchedTemplateLayers = new WeakSet();
-
-export function suppressNextMeasuredTemplateCreates(count = 1) {
-  suppressedMeasuredTemplateCreatesRemaining = Math.max(
-    suppressedMeasuredTemplateCreatesRemaining,
-    Math.max(Number(count) || 0, 0)
-  );
-}
-
-export function consumeSuppressedMeasuredTemplateCreate() {
-  if (suppressedMeasuredTemplateCreatesRemaining <= 0) return false;
-  suppressedMeasuredTemplateCreatesRemaining -= 1;
-  return true;
-}
+let canvasGuardInstalled = false;
 
 export function clearFogCache() {
   fogDataCache.clear();
 }
 
-function shouldSuppressMainTemplatePlacement() {
-  if (suppressNextMainTemplateInteraction && Date.now() >= suppressMainTemplatePlacementUntil) {
-    suppressNextMainTemplateInteraction = false;
+export function captureActiveTemplatePreviews() {
+  for (const display of Object.values(activeDisplays)) {
+    display.captureActiveTemplatePreview().then(refreshed => {
+      if (refreshed) display.refresh();
+    });
   }
-
-  return suppressNextMainTemplateInteraction;
-}
-
-function suppressMainTemplatePlacementFor(durationMs = 1500) {
-  suppressNextMainTemplateInteraction = true;
-  suppressMainTemplatePlacementUntil = Date.now() + durationMs;
-
-  if (suppressMainTemplatePlacementClearTimer) {
-    clearTimeout(suppressMainTemplatePlacementClearTimer);
-    suppressMainTemplatePlacementClearTimer = null;
-  }
-}
-
-function scheduleMainTemplateSuppressionClear() {
-  if (suppressMainTemplatePlacementClearTimer) return;
-
-  suppressMainTemplatePlacementClearTimer = setTimeout(() => {
-    suppressNextMainTemplateInteraction = false;
-    suppressMainTemplatePlacementClearTimer = null;
-  }, 0);
-}
-
-function suppressNextTemplateLayerClicks(count = 1) {
-  suppressedTemplateLayerClicksRemaining = Math.max(
-    suppressedTemplateLayerClicksRemaining,
-    Math.max(Number(count) || 0, 0)
-  );
-}
-
-function consumeSuppressedTemplateEvent(event) {
-  if (!event) return;
-  event.preventDefault?.();
-  event.stopPropagation?.();
-  event.stopImmediatePropagation?.();
-
-  if (event.type === "click") scheduleMainTemplateSuppressionClear();
 }
 
 function escapeHtml(value) {
@@ -160,55 +80,50 @@ function isTokenHidden(token) {
 const fogDataCache = new Map();
 
 function getFogDataForUser(userId) {
-  try {
-    if (!userId) return { exists: false };
+  if (!userId) return { exists: false };
 
-    const cached = fogDataCache.get(userId);
-    const fogDoc = canvas.scene?.fogExplorations?.get(userId);
+  const cached = fogDataCache.get(userId);
+  const fogDoc = canvas.scene?.fogExplorations?.get(userId);
 
-    if (!fogDoc) {
-      if (!cached) fogDataCache.set(userId, { exists: false });
-      return { exists: false };
-    }
-
-    if (!fogDoc.explored) {
-      if (!cached || cached.exploredKey !== null) fogDataCache.set(userId, { exists: true, imageData: null, exploredKey: null });
-      return { exists: true, imageData: null };
-    }
-
-    if (cached?.exploredKey === fogDoc.explored) return cached;
-
-    const entry = {
-      exists: true,
-      exploredKey: fogDoc.explored,
-      imageData: cached?.imageData || null,
-      canvas: cached?.canvas || null,
-      refreshing: true
-    };
-    fogDataCache.set(userId, entry);
-
-    const img = new Image();
-    const fogCanvas = document.createElement("canvas");
-    const fogCtx = fogCanvas.getContext("2d");
-
-    img.onload = () => {
-      fogCanvas.width = img.width;
-      fogCanvas.height = img.height;
-      fogCtx.clearRect(0, 0, fogCanvas.width, fogCanvas.height);
-      fogCtx.drawImage(img, 0, 0);
-      entry.imageData = fogCtx.getImageData(0, 0, fogCanvas.width, fogCanvas.height);
-      entry.canvas = fogCanvas;
-      entry.refreshing = false;
-      Hooks.callAll("simpleCompanionFogLoaded", userId);
-    };
-    img.onerror = () => { entry.refreshing = false; };
-    img.src = `data:image/webp;base64,${fogDoc.explored}`;
-
-    return entry;
-  } catch { /* v13 fog API differs; fall back to no fog */
-    fogDataCache.delete(userId);
+  if (!fogDoc) {
+    if (!cached) fogDataCache.set(userId, { exists: false });
     return { exists: false };
   }
+
+  if (!fogDoc.explored) {
+    if (!cached || cached.exploredKey !== null) fogDataCache.set(userId, { exists: true, imageData: null, exploredKey: null });
+    return { exists: true, imageData: null };
+  }
+
+  if (cached?.exploredKey === fogDoc.explored) return cached;
+
+  const entry = {
+    exists: true,
+    exploredKey: fogDoc.explored,
+    imageData: cached?.imageData || null,
+    canvas: cached?.canvas || null,
+    refreshing: true
+  };
+  fogDataCache.set(userId, entry);
+
+  const img = new Image();
+  const fogCanvas = document.createElement("canvas");
+  const fogCtx = fogCanvas.getContext("2d");
+
+  img.onload = () => {
+    fogCanvas.width = img.width;
+    fogCanvas.height = img.height;
+    fogCtx.clearRect(0, 0, fogCanvas.width, fogCanvas.height);
+    fogCtx.drawImage(img, 0, 0);
+    entry.imageData = fogCtx.getImageData(0, 0, fogCanvas.width, fogCanvas.height);
+    entry.canvas = fogCanvas;
+    entry.refreshing = false;
+    Hooks.callAll("simpleCompanionFogLoaded", userId);
+  };
+  img.onerror = () => { entry.refreshing = false; };
+  img.src = `data:image/webp;base64,${fogDoc.explored}`;
+
+  return entry;
 }
 
 function isFogPointExplored(userId, sceneX, sceneY) {
@@ -244,7 +159,7 @@ function getDisplayUserId(display) {
     if (userId === "default") continue;
     const user = game.users.get(userId);
     if (!user || user.isGM) continue;
-    if (level >= (foundry.CONST ?? foundry.constants ?? CONST).DOCUMENT_OWNERSHIP_LEVELS.OWNER) return userId;
+    if (level >= foundry.CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER) return userId;
   }
 
   return null;
@@ -311,25 +226,6 @@ function getTokenCanvasCenter(token, gridSize) {
 }
 
 function getActiveTemplatePreview() {
-  if (isV14()) {
-    return getActiveRegionPreview();
-  }
-  const previewChildren = Array.from(canvas.templates?.preview?.children ?? []);
-  const previewCandidates = [
-    ...previewChildren,
-    canvas.templates?._preview,
-    canvas.templates?.hover
-  ].filter(Boolean);
-
-  return previewCandidates.find((child) => {
-    const doc = child.document;
-    const documentName = doc?.documentName ?? doc?.documentType ?? doc?.constructor?.documentName ?? doc?.constructor?.documentType;
-    return child.isPreview !== false && documentName === "MeasuredTemplate";
-  }) ?? null;
-}
-
-// v14 Region-based placement detection
-function getActiveRegionPreview() {
   const regions = canvas?.regions?.placeables ?? [];
   for (const region of regions) {
     const doc = region.document;
@@ -398,24 +294,10 @@ function cloneValue(value) {
 }
 
 function clearNativeTemplatePreview(preview) {
-  if (isV14()) {
-    clearRegionPreview(preview);
-    return;
-  }
-  canvas.templates?.clearPreviewContainer?.();
-  preview?.parent?.removeChild?.(preview);
-  preview?.destroy?.({ children: true });
-
-  if (canvas.templates?._preview === preview) {
-    try { canvas.templates._preview = null; } catch { /* _preview may not exist in v13 */ }
-  }
-}
-
-function clearRegionPreview(preview) {
   if (!preview) return;
   try {
     preview.document.delete();
-  } catch { /* Region preview removal */ }
+  } catch { /* region preview removal */ }
 }
 
 async function getTemplateIconPath(template) {
@@ -567,124 +449,22 @@ function isTemplateActionTarget(event) {
   return Boolean(event?.target?.closest?.("[data-companion-template-confirm], [data-companion-template-cancel], [data-companion-template-rotate-handle], [data-companion-zoom-in], [data-companion-zoom-out]"));
 }
 
-function blockMainCanvasTemplatePlacement(event) {
+function blockCanvasInteraction(event) {
   if (!hasActiveDisplay() || !isPrimaryPointerEvent(event)) return;
-
-  if (shouldSuppressMainTemplatePlacement()) {
-    consumeSuppressedTemplateEvent(event);
-    return;
-  }
-
   if (!getActiveTemplatePreview()) return;
-
   event.preventDefault();
   event.stopPropagation();
   event.stopImmediatePropagation?.();
 }
 
-function installCanvasTemplatePlacementGuard() {
-  const canvasElement = canvas?.app?.view ?? canvas?.app?.canvas ?? document.getElementById("board")?.querySelector("canvas");
-  if (canvasTemplatePlacementGuardInstalled || !canvasElement) return;
-
-  for (const eventName of BLOCKED_TEMPLATE_PLACEMENT_EVENTS) {
-    canvasElement.addEventListener(eventName, blockMainCanvasTemplatePlacement, true);
+function installCanvasGuard() {
+  if (canvasGuardInstalled) return;
+  const canvasElement = document.getElementById("board")?.querySelector("canvas");
+  if (!canvasElement) return;
+  for (const eventName of BLOCKED_CANVAS_EVENTS) {
+    canvasElement.addEventListener(eventName, blockCanvasInteraction, true);
   }
-
-  canvasTemplatePlacementGuardInstalled = true;
-}
-
-function installTemplateLayerPlacementGuard() {
-  try {
-    const templateLayer = canvas?.templates;
-    if (!templateLayer || patchedTemplateLayers.has(templateLayer)) return;
-
-    for (const methodName of BLOCKED_TEMPLATE_LAYER_METHODS) {
-      const originalMethod = templateLayer[methodName];
-      if (typeof originalMethod !== "function") continue;
-
-      templateLayer[methodName] = function simpleCompanionTemplatePlacementGuard(event, ...args) {
-        if (methodName === "_onClickLeft" && suppressedTemplateLayerClicksRemaining > 0) {
-          suppressedTemplateLayerClicksRemaining -= 1;
-          consumeSuppressedTemplateEvent(event);
-          return false;
-        }
-
-        if (shouldSuppressMainTemplatePlacement()) {
-          consumeSuppressedTemplateEvent(event);
-          return false;
-        }
-
-        if (hasActiveDisplay() && getActiveTemplatePreview()) {
-          event?.preventDefault?.();
-          event?.stopPropagation?.();
-          return false;
-        }
-
-        return originalMethod.call(this, event, ...args);
-      };
-    }
-
-    patchedTemplateLayers.add(templateLayer);
-  } catch { /* Layer methods may differ in v13 */ }
-}
-
-function installMeasuredTemplatePreviewGuard() {
-  try {
-    const prototype = globalThis.CONFIG?.MeasuredTemplate?.objectClass?.prototype;
-    if (measuredTemplatePreviewGuardInstalled || !prototype) return;
-
-    for (const methodName of BLOCKED_TEMPLATE_PREVIEW_METHODS) {
-      const originalMethod = prototype[methodName];
-      if (typeof originalMethod !== "function") continue;
-
-      prototype[methodName] = function simpleCompanionTemplatePreviewGuard(event, ...args) {
-        if (hasActiveDisplay() && this.isPreview && getActiveTemplatePreview()) {
-          event?.preventDefault?.();
-          event?.stopPropagation?.();
-          return false;
-        }
-
-        return originalMethod.call(this, event, ...args);
-      };
-    }
-
-    measuredTemplatePreviewGuardInstalled = true;
-  } catch { /* Prototype methods may differ in v13 */ }
-}
-
-function installRegionLayerPlacementGuard() {
-  try {
-    const regionLayer = canvas?.regions;
-    if (!regionLayer || patchedTemplateLayers.has(regionLayer)) return;
-
-    for (const methodName of BLOCKED_TEMPLATE_LAYER_METHODS) {
-      const originalMethod = regionLayer[methodName];
-      if (typeof originalMethod !== "function") continue;
-
-      regionLayer[methodName] = function simpleCompanionRegionPlacementGuard(event, ...args) {
-        if (methodName === "_onClickLeft" && suppressedTemplateLayerClicksRemaining > 0) {
-          suppressedTemplateLayerClicksRemaining -= 1;
-          consumeSuppressedTemplateEvent(event);
-          return false;
-        }
-
-        if (shouldSuppressMainTemplatePlacement()) {
-          consumeSuppressedTemplateEvent(event);
-          return false;
-        }
-
-        if (hasActiveDisplay() && getActiveTemplatePreview()) {
-          event?.preventDefault?.();
-          event?.stopPropagation?.();
-          return false;
-        }
-
-        return originalMethod.call(this, event, ...args);
-      };
-    }
-
-    patchedTemplateLayers.add(regionLayer);
-  } catch { /* Region layer methods may differ in v14 */ }
+  canvasGuardInstalled = true;
 }
 
 const COMPANION_BUTTON_SELECTOR = [
@@ -712,14 +492,14 @@ export class PlayerDisplay extends Application {
     this.pendingTemplateIconPath = null;
     this.viewportGridCount = 9;
     this.viewportZoom = this.getViewportZoomForGridCount(this.viewportGridCount);
-    this.templateCaptureInterval = null;
     this.isTemplateRotationDragging = false;
     this.templateRotationPointerId = null;
     activeDisplays[displayIndex] = this;
   }
 
   static get defaultOptions() {
-    return foundry.utils.mergeObject(super.defaultOptions, {
+    return {
+      ...super.defaultOptions,
       id: "simple-companion-display",
       template: null,
       popOut: true,
@@ -727,7 +507,7 @@ export class PlayerDisplay extends Application {
       height: 800,
       resizable: true,
       title: "Player Display"
-    });
+    };
   }
 
   get id() {
@@ -1403,14 +1183,7 @@ export class PlayerDisplay extends Application {
     viewport?.addEventListener?.("pointermove", (event) => this.handleViewportPointerMove(event));
     viewport?.addEventListener?.("pointerup", (event) => this.stopTemplateRotationDrag(event));
     viewport?.addEventListener?.("pointercancel", (event) => this.stopTemplateRotationDrag(event));
-    installCanvasTemplatePlacementGuard();
-    if (isV14()) {
-      installRegionLayerPlacementGuard();
-    } else {
-      installTemplateLayerPlacementGuard();
-      installMeasuredTemplatePreviewGuard();
-    }
-    this.startTemplateCapture();
+    installCanvasGuard();
 
     element?.addEventListener?.("click", (event) => {
       const target = event.target?.closest?.(COMPANION_BUTTON_SELECTOR);
@@ -1427,52 +1200,24 @@ export class PlayerDisplay extends Application {
     });
   }
 
-  startTemplateCapture() {
-    if (this.templateCaptureInterval) return;
-
-    this.templateCaptureInterval = setInterval(() => {
-      (async () => {
-        if (await this.captureActiveTemplatePreview()) {
-          this.refresh();
-        }
-      })();
-    }, TEMPLATE_CAPTURE_INTERVAL);
-  }
-
   async captureActiveTemplatePreview() {
     if (this.pendingTemplateData) return false;
 
     const preview = getActiveTemplatePreview();
     if (!preview?.document) return false;
 
-    if (isV14()) {
-      const templateData = regionShapeToTemplateData(preview);
-      if (!templateData) return false;
-      this.pendingTemplateData = templateData;
-      this.pendingTemplateScreenPoint = { x: VIEWPORT_SIZE / 2, y: VIEWPORT_SIZE / 2 };
-      this.pendingTemplateIconPath = await getTemplateIconPath(preview);
-      clearNativeTemplatePreview(preview);
-      endNativeTemplatePlacementMode();
-      return true;
-    }
-
-    if (!preview?.document?.toObject) return false;
-
-    const templateData = preview.document.toObject();
-    delete templateData._id;
+    const templateData = regionShapeToTemplateData(preview);
+    if (!templateData) return false;
     this.pendingTemplateData = templateData;
     this.pendingTemplateScreenPoint = { x: VIEWPORT_SIZE / 2, y: VIEWPORT_SIZE / 2 };
     this.pendingTemplateIconPath = await getTemplateIconPath(preview);
-
     clearNativeTemplatePreview(preview);
     endNativeTemplatePlacementMode();
     return true;
   }
 
   async buildActiveTemplatesHtml(tokenCanvasCenter, gridSize) {
-    const placeables = isV14()
-      ? (canvas.regions?.placeables ?? [])
-      : (canvas.templates?.placeables ?? []);
+    const placeables = canvas.regions?.placeables ?? [];
     if (!placeables.length) return "";
 
     const centerX = VIEWPORT_SIZE / 2;
@@ -1481,9 +1226,7 @@ export class PlayerDisplay extends Application {
     const elements = [];
 
     for (const placeable of placeables) {
-      const templateData = isV14()
-        ? regionShapeToTemplateData(placeable)
-        : (placeable?.document?.toObject?.());
+      const templateData = regionShapeToTemplateData(placeable);
       if (!templateData) continue;
 
       const originX = centerX + ((templateData.x - tokenCanvasCenter.x) / gridSize) * gridPixels;
@@ -1850,7 +1593,7 @@ export class PlayerDisplay extends Application {
   }
 
   async syncTemplatePreviewToViewport(event) {
-    this.captureActiveTemplatePreview();
+    await this.captureActiveTemplatePreview();
     if (this.pendingTemplateData) {
       const viewportPoint = this.getViewportScreenPoint(event);
       if (viewportPoint) {
@@ -1870,25 +1613,13 @@ export class PlayerDisplay extends Application {
     const snappedPoint = this.getViewportScenePoint(event);
     if (!snappedPoint) return null;
 
-    if (!isV14()) {
-      if (!preview.document.updateSource) return null;
-      try {
-        await preview.document.updateSource({
-          x: snappedPoint.x,
-          y: snappedPoint.y
-        });
-      } catch { /* updateSource signature may differ */ }
-      preview.refresh?.();
-      preview.position?.set?.(snappedPoint.x, snappedPoint.y);
-    } else {
-      if (!preview.document.updateSource) return null;
-      try {
-        await preview.document.updateSource({
-          x: snappedPoint.x,
-          y: snappedPoint.y
-        });
-      } catch { }
-    }
+    if (!preview.document.updateSource) return null;
+    try {
+      await preview.document.updateSource({
+        x: snappedPoint.x,
+        y: snappedPoint.y
+      });
+    } catch { }
 
     return { preview, snappedPoint };
   }
@@ -1928,16 +1659,9 @@ export class PlayerDisplay extends Application {
     const snappedPoint = previewState?.snappedPoint ?? this.getViewportScenePoint(event);
     if (!snappedPoint || !canvas.scene) return;
 
-    if (isV14()) {
-      const templateData = regionShapeToTemplateData(preview);
-      if (!templateData) return;
-      this.pendingTemplateData = templateData;
-    } else {
-      if (!preview?.document?.toObject && !previewState?.templateData) return;
-      this.pendingTemplateData = previewState?.templateData
-        ? cloneValue(previewState.templateData)
-        : preview.document.toObject();
-    }
+    const templateData = regionShapeToTemplateData(preview);
+    if (!templateData) return;
+    this.pendingTemplateData = templateData;
     delete this.pendingTemplateData._id;
     this.pendingTemplateIconPath = await getTemplateIconPath(preview);
     this.pendingTemplateScreenPoint = this.getViewportScreenPoint(event) ?? this.pendingTemplateScreenPoint ?? { x: VIEWPORT_SIZE / 2, y: VIEWPORT_SIZE / 2 };
@@ -1981,14 +1705,9 @@ export class PlayerDisplay extends Application {
     templateData.x = snappedPoint.x;
     templateData.y = snappedPoint.y;
 
-    if (isV14()) {
-      const regionData = templateDataToRegionData(templateData);
-      if (regionData) {
-        await canvas.scene.createEmbeddedDocuments("Region", [regionData]);
-      }
-    } else {
-      await canvas.scene.createEmbeddedDocuments("MeasuredTemplate", [templateData]);
-      canvas.templates.clearPreviewContainer?.();
+    const regionData = templateDataToRegionData(templateData);
+    if (regionData) {
+      await canvas.scene.createEmbeddedDocuments("Region", [regionData]);
     }
     clearNativeTemplatePreview(getActiveTemplatePreview());
     endNativeTemplatePlacementMode();
@@ -1997,9 +1716,6 @@ export class PlayerDisplay extends Application {
     this.pendingTemplateIconPath = null;
     this.isTemplateRotationDragging = false;
     this.templateRotationPointerId = null;
-    suppressMainTemplatePlacementFor();
-    suppressNextTemplateLayerClicks(1);
-    if (!isV14()) suppressNextMeasuredTemplateCreates(1);
     this.refresh();
   }
 
@@ -2014,13 +1730,6 @@ export class PlayerDisplay extends Application {
     this.templateRotationPointerId = null;
     clearNativeTemplatePreview(getActiveTemplatePreview());
     endNativeTemplatePlacementMode();
-    suppressMainTemplatePlacementFor();
-    if (isV14()) {
-      suppressNextTemplateLayerClicks(1);
-    } else {
-      suppressNextTemplateLayerClicks(1);
-      suppressNextMeasuredTemplateCreates(1);
-    }
     this.refresh();
   }
 
@@ -2084,10 +1793,6 @@ export class PlayerDisplay extends Application {
   close(options) {
     if (this.pendingRefresh) {
       clearTimeout(this.pendingRefresh);
-    }
-    if (this.templateCaptureInterval) {
-      clearInterval(this.templateCaptureInterval);
-      this.templateCaptureInterval = null;
     }
     delete activeDisplays[this.displayIndex];
     return super.close(options);

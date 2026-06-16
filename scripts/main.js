@@ -1,13 +1,7 @@
 import { registerSettings } from "./settings.js";
-import { PlayerDisplay, activeDisplays, consumeSuppressedMeasuredTemplateCreate, clearFogCache } from "./playerDisplay.js";
+import { PlayerDisplay, activeDisplays, captureActiveTemplatePreviews, clearFogCache } from "./playerDisplay.js";
 
 const MODULE_ID = "simple-companion";
-
-function isV14() {
-  try {
-    return Number(game?.release?.generation ?? 14) >= 14;
-  } catch { return true; }
-}
 
 function isDebugMode() {
   return game.settings.get(MODULE_ID, "debugMode");
@@ -134,14 +128,8 @@ Hooks.on("createCombatant", () => {
   refreshAllDisplays();
 });
 
-Hooks.on("preCreateMeasuredTemplate", (_document, _data, _options, userId) => {
-  if (userId !== game.user?.id) return;
-  if (consumeSuppressedMeasuredTemplateCreate()) return false;
-});
-
-Hooks.on("preCreateRegion", (_document, _data, _options, userId) => {
-  if (userId !== game.user?.id) return;
-  if (consumeSuppressedMeasuredTemplateCreate()) return false;
+Hooks.on("createRegion", () => {
+  captureActiveTemplatePreviews();
 });
 
 Hooks.on("updateCombatant", () => {
