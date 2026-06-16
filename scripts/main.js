@@ -3,6 +3,12 @@ import { PlayerDisplay, activeDisplays, consumeSuppressedMeasuredTemplateCreate,
 
 const MODULE_ID = "simple-companion";
 
+function isV14() {
+  try {
+    return Number(game?.release?.generation ?? 14) >= 14;
+  } catch { return true; }
+}
+
 function isDebugMode() {
   return game.settings.get(MODULE_ID, "debugMode");
 }
@@ -129,6 +135,11 @@ Hooks.on("createCombatant", () => {
 });
 
 Hooks.on("preCreateMeasuredTemplate", (_document, _data, _options, userId) => {
+  if (userId !== game.user?.id) return;
+  if (consumeSuppressedMeasuredTemplateCreate()) return false;
+});
+
+Hooks.on("preCreateRegion", (_document, _data, _options, userId) => {
   if (userId !== game.user?.id) return;
   if (consumeSuppressedMeasuredTemplateCreate()) return false;
 });

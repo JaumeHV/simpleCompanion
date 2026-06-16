@@ -15,25 +15,6 @@ enhance inperson play where interaction with a main screen is not viable.
 - Utilise touch-based placement and confirmation interactions
 
 
-## RELEASE FLOW
-- Script: `scripts/release.ps1`
-- Prerequisites:
-  - Clean working tree on `main`
-  - `git` configured with push access to `origin`
-  - `gh` installed and authenticated (`gh auth login`) for release creation
-- Default behavior:
-  - Calculates the next patch tag from existing tags (for example `v0.0.29` -> `v0.0.30`)
-  - Updates `module.json` `version` and `download`
-  - Commits all current changes
-  - Pushes `main`
-  - Creates and pushes the new tag
-  - Creates a GitHub release for the new tag
-- Usage examples:
-  - Full release: `powershell -ExecutionPolicy Bypass -File .\scripts\release.ps1 -Message "release: v0.0.30"`
-  - Skip GitHub release (no `gh`): `powershell -ExecutionPolicy Bypass -File .\scripts\release.ps1 -SkipRelease`
-  - Skip branch push: `powershell -ExecutionPolicy Bypass -File .\scripts\release.ps1 -SkipPush`
-
-
 ## LICENSE
 As I (the Author) created this module for a very specific purpose and 
 have no plans to maintain or extend its functionality outside of this 

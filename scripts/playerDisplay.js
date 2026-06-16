@@ -1,5 +1,14 @@
 const MODULE_ID = "simple-companion";
 
+// ---------------------------------------------------------------------------
+// Foundry version detection
+// ---------------------------------------------------------------------------
+function isV14() {
+  try {
+    return Number(game?.release?.generation ?? 14) >= 14;
+  } catch { return true; }
+}
+
 // Viewport constants
 const VIEWPORT_SIZE = 720;
 const GRID_PIXELS = 72;
@@ -151,50 +160,55 @@ function isTokenHidden(token) {
 const fogDataCache = new Map();
 
 function getFogDataForUser(userId) {
-  if (!userId) return { exists: false };
+  try {
+    if (!userId) return { exists: false };
 
-  const cached = fogDataCache.get(userId);
-  const fogDoc = canvas.scene?.fogExplorations?.get(userId);
+    const cached = fogDataCache.get(userId);
+    const fogDoc = canvas.scene?.fogExplorations?.get(userId);
 
-  if (!fogDoc) {
-    if (!cached) fogDataCache.set(userId, { exists: false });
+    if (!fogDoc) {
+      if (!cached) fogDataCache.set(userId, { exists: false });
+      return { exists: false };
+    }
+
+    if (!fogDoc.explored) {
+      if (!cached || cached.exploredKey !== null) fogDataCache.set(userId, { exists: true, imageData: null, exploredKey: null });
+      return { exists: true, imageData: null };
+    }
+
+    if (cached?.exploredKey === fogDoc.explored) return cached;
+
+    const entry = {
+      exists: true,
+      exploredKey: fogDoc.explored,
+      imageData: cached?.imageData || null,
+      canvas: cached?.canvas || null,
+      refreshing: true
+    };
+    fogDataCache.set(userId, entry);
+
+    const img = new Image();
+    const fogCanvas = document.createElement("canvas");
+    const fogCtx = fogCanvas.getContext("2d");
+
+    img.onload = () => {
+      fogCanvas.width = img.width;
+      fogCanvas.height = img.height;
+      fogCtx.clearRect(0, 0, fogCanvas.width, fogCanvas.height);
+      fogCtx.drawImage(img, 0, 0);
+      entry.imageData = fogCtx.getImageData(0, 0, fogCanvas.width, fogCanvas.height);
+      entry.canvas = fogCanvas;
+      entry.refreshing = false;
+      Hooks.callAll("simpleCompanionFogLoaded", userId);
+    };
+    img.onerror = () => { entry.refreshing = false; };
+    img.src = `data:image/webp;base64,${fogDoc.explored}`;
+
+    return entry;
+  } catch { /* v13 fog API differs; fall back to no fog */
+    fogDataCache.delete(userId);
     return { exists: false };
   }
-
-  if (!fogDoc.explored) {
-    if (!cached || cached.exploredKey !== null) fogDataCache.set(userId, { exists: true, imageData: null, exploredKey: null });
-    return { exists: true, imageData: null };
-  }
-
-  if (cached?.exploredKey === fogDoc.explored) return cached;
-
-  const entry = {
-    exists: true,
-    exploredKey: fogDoc.explored,
-    imageData: cached?.imageData || null,
-    canvas: cached?.canvas || null,
-    refreshing: true
-  };
-  fogDataCache.set(userId, entry);
-
-  const img = new Image();
-  const fogCanvas = document.createElement("canvas");
-  const fogCtx = fogCanvas.getContext("2d");
-
-  img.onload = () => {
-    fogCanvas.width = img.width;
-    fogCanvas.height = img.height;
-    fogCtx.clearRect(0, 0, fogCanvas.width, fogCanvas.height);
-    fogCtx.drawImage(img, 0, 0);
-    entry.imageData = fogCtx.getImageData(0, 0, fogCanvas.width, fogCanvas.height);
-    entry.canvas = fogCanvas;
-    entry.refreshing = false;
-    Hooks.callAll("simpleCompanionFogLoaded", userId);
-  };
-  img.onerror = () => { entry.refreshing = false; };
-  img.src = `data:image/webp;base64,${fogDoc.explored}`;
-
-  return entry;
 }
 
 function isFogPointExplored(userId, sceneX, sceneY) {
@@ -204,10 +218,10 @@ function isFogPointExplored(userId, sceneX, sceneY) {
   const dims = canvas.dimensions;
   if (!dims) return false;
 
-  const scenePixelW = dims.sceneWidth ?? (canvas.scene?.width ?? 0) * (canvas.grid?.size ?? 0);
-  const scenePixelH = dims.sceneHeight ?? (canvas.scene?.height ?? 0) * (canvas.grid?.size ?? 0);
-  const offsetX = dims.sceneX ?? 0;
-  const offsetY = dims.sceneY ?? 0;
+  const scenePixelW = dims.sceneWidth ?? dims.width ?? (canvas.scene?.width ?? 0) * (canvas.grid?.size ?? 0);
+  const scenePixelH = dims.sceneHeight ?? dims.height ?? (canvas.scene?.height ?? 0) * (canvas.grid?.size ?? 0);
+  const offsetX = dims.sceneX ?? dims.x ?? 0;
+  const offsetY = dims.sceneY ?? dims.y ?? 0;
   if (!scenePixelW || !scenePixelH) return false;
 
   const ratioX = entry.canvas.width / scenePixelW;
@@ -230,15 +244,24 @@ function getDisplayUserId(display) {
     if (userId === "default") continue;
     const user = game.users.get(userId);
     if (!user || user.isGM) continue;
-    if (level >= CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER) return userId;
+    if (level >= (foundry.CONST ?? foundry.constants ?? CONST).DOCUMENT_OWNERSHIP_LEVELS.OWNER) return userId;
   }
 
   return null;
 }
 
+function getWallCoords(wall) {
+  const doc = wall.document ?? wall;
+  if (doc.c?.length >= 4) return { x1: doc.c[0], y1: doc.c[1], x2: doc.c[2], y2: doc.c[3] };
+  if (doc.topX != null && doc.topY != null && doc.bottomX != null && doc.bottomY != null) {
+    return { x1: doc.topX, y1: doc.topY, x2: doc.bottomX, y2: doc.bottomY };
+  }
+  return null;
+}
+
 function isWallRelevant(wall, display) {
-  const c = wall.document.c;
-  if (!c?.length) return false;
+  const coords = getWallCoords(wall);
+  if (!coords) return false;
 
   const userId = display ? getDisplayUserId(display) : null;
   if (!userId) return true;
@@ -248,9 +271,9 @@ function isWallRelevant(wall, display) {
   if (!fogEntry.imageData) return false;
 
   const points = [
-    { x: (c[0] + c[2]) / 2, y: (c[1] + c[3]) / 2 },
-    { x: c[0], y: c[1] },
-    { x: c[2], y: c[3] }
+    { x: (coords.x1 + coords.x2) / 2, y: (coords.y1 + coords.y2) / 2 },
+    { x: coords.x1, y: coords.y1 },
+    { x: coords.x2, y: coords.y2 }
   ];
 
   for (const point of points) {
@@ -288,6 +311,9 @@ function getTokenCanvasCenter(token, gridSize) {
 }
 
 function getActiveTemplatePreview() {
+  if (isV14()) {
+    return getActiveRegionPreview();
+  }
   const previewChildren = Array.from(canvas.templates?.preview?.children ?? []);
   const previewCandidates = [
     ...previewChildren,
@@ -296,13 +322,26 @@ function getActiveTemplatePreview() {
   ].filter(Boolean);
 
   return previewCandidates.find((child) => {
-    const documentName = child.document?.documentName ?? child.document?.constructor?.documentName;
+    const doc = child.document;
+    const documentName = doc?.documentName ?? doc?.documentType ?? doc?.constructor?.documentName ?? doc?.constructor?.documentType;
     return child.isPreview !== false && documentName === "MeasuredTemplate";
   }) ?? null;
 }
 
+// v14 Region-based placement detection
+function getActiveRegionPreview() {
+  const regions = canvas?.regions?.placeables ?? [];
+  for (const region of regions) {
+    const doc = region.document;
+    if (doc.isPreview) return region;
+    if (doc.flags?.dnd5e?.origin && !doc.behaviors?.length) return region;
+    if (doc.flags?.dnd5e?.preview) return region;
+  }
+  return null;
+}
+
 function getSceneGridDistance() {
-  return Number(canvas.scene?.grid?.distance ?? canvas.grid?.distance ?? 5) || 5;
+  return Number(canvas.scene?.grid?.distance ?? 5) || 5;
 }
 
 function templateDistanceToViewportPixels(distance, gridPixels = GRID_PIXELS) {
@@ -359,19 +398,30 @@ function cloneValue(value) {
 }
 
 function clearNativeTemplatePreview(preview) {
+  if (isV14()) {
+    clearRegionPreview(preview);
+    return;
+  }
   canvas.templates?.clearPreviewContainer?.();
   preview?.parent?.removeChild?.(preview);
   preview?.destroy?.({ children: true });
 
   if (canvas.templates?._preview === preview) {
-    canvas.templates._preview = null;
+    try { canvas.templates._preview = null; } catch { /* _preview may not exist in v13 */ }
   }
 }
 
-function getTemplateIconPath(template) {
+function clearRegionPreview(preview) {
+  if (!preview) return;
+  try {
+    preview.document.delete();
+  } catch { /* Region preview removal */ }
+}
+
+async function getTemplateIconPath(template) {
   const originUuid = template?.document?.flags?.dnd5e?.origin;
   if (typeof originUuid === "string" && originUuid.trim()) {
-    const source = globalThis.fromUuidSync?.(originUuid);
+    const source = globalThis.fromUuidSync?.(originUuid) ?? (await globalThis.fromUuid?.(originUuid).catch(() => null));
     const sourceImg = source?.img ?? source?.texture?.src;
     if (typeof sourceImg === "string" && sourceImg.trim()) return sourceImg;
   }
@@ -395,17 +445,114 @@ function getTemplateIconOffset(templateData, gridPixels = GRID_PIXELS) {
 }
 
 function endNativeTemplatePlacementMode() {
-  const controls = ui.controls;
-  const activeControl = controls?.activeControl ?? controls?.control?.name;
-  if (activeControl !== "measure") return;
+  try {
+    const controls = ui.controls;
+    const activeControl = controls?.activeControl ?? controls?.control?.name;
+    if (activeControl !== "measure") return;
 
-  if (typeof controls?.activateControl === "function") {
-    controls.activateControl("token");
+    (controls?.activateTokenLayer ?? controls?.activateControl)?.("token");
+    (controls?.activateTool ?? controls?.activateControl)?.("select");
+  } catch { /* ui.controls API may differ in v13 */ }
+}
+
+// Convert Region shape data to unified internal format
+function regionShapeToTemplateData(region) {
+  const doc = region.document;
+  const shape = doc.shapes?.[0];
+  if (!shape) return null;
+
+  const sceneGrid = getSceneGridDistance();
+  const gridSize = canvas.grid.size;
+  const pixelsPerUnit = gridSize / sceneGrid;
+
+  const data = {
+    x: shape.x ?? doc.x ?? 0,
+    y: shape.y ?? doc.y ?? 0,
+    direction: shape.rotation ?? 0
+  };
+
+  switch (shape.type) {
+    case "circle":
+      data.t = "circle";
+      data.distance = (shape.radius ?? 0) / pixelsPerUnit;
+      break;
+    case "cone":
+      data.t = "cone";
+      data.distance = (shape.radius ?? 0) / pixelsPerUnit;
+      data.angle = shape.angle ?? 90;
+      break;
+    case "line":
+      data.t = "ray";
+      data.distance = (shape.length ?? 0) / pixelsPerUnit;
+      data.width = (shape.width ?? gridSize / 2) / pixelsPerUnit;
+      break;
+    case "rectangle":
+      data.t = "rect";
+      data.distance = (shape.width ?? 0) / pixelsPerUnit;
+      data.width = (shape.height ?? 0) / pixelsPerUnit;
+      break;
+    default:
+      data.t = "circle";
+      data.distance = 5;
   }
 
-  if (typeof controls?.activateTool === "function") {
-    controls.activateTool("select");
+  data.flags = foundry.utils.deepClone(doc.flags ?? {});
+  return data;
+}
+
+function templateDataToRegionData(data) {
+  if (!data) return null;
+
+  const sceneGrid = getSceneGridDistance();
+  const gridSize = canvas.grid.size;
+  const pixelsPerUnit = gridSize / sceneGrid;
+
+  const regionBase = {
+    name: "AoE",
+    color: "#FF0000",
+    elevation: { bottom: null, top: null },
+    levels: [],
+    restriction: { enabled: false, type: "move", priority: 0 },
+    attachment: { token: null },
+    behaviors: [],
+    visibility: 2,
+    highlightMode: "coverage",
+    displayMeasurements: true,
+    hidden: false,
+    locked: false,
+    flags: {}
+  };
+
+  if (data.flags) {
+    regionBase.flags = foundry.utils.deepClone(data.flags);
+    delete regionBase.flags.dnd5e?.origin;
   }
+
+  const type = data.t ?? data.type ?? "circle";
+  const direction = Number(data.direction ?? 0);
+  const x = data.x ?? 0;
+  const y = data.y ?? 0;
+
+  let shape;
+  switch (type) {
+    case "circle":
+      shape = { type: "circle", x, y, radius: (data.distance ?? 5) * pixelsPerUnit };
+      break;
+    case "cone":
+      shape = { type: "cone", x, y, radius: (data.distance ?? 5) * pixelsPerUnit, angle: data.angle ?? 90, rotation: direction, curvature: "round" };
+      break;
+    case "ray":
+      shape = { type: "line", x, y, length: (data.distance ?? 5) * pixelsPerUnit, width: (data.width ?? gridSize / 2) * pixelsPerUnit, rotation: direction };
+      break;
+    case "rect":
+      shape = { type: "rectangle", x, y, width: (data.distance ?? 5) * pixelsPerUnit, height: (data.width ?? gridSize / 2) * pixelsPerUnit, rotation: direction, anchorX: 0, anchorY: 0 };
+      break;
+    default:
+      shape = { type: "circle", x, y, radius: (data.distance ?? 5) * pixelsPerUnit };
+  }
+
+  regionBase.shapes = [shape];
+  return regionBase;
 }
 
 function hasActiveDisplay() {
@@ -436,7 +583,7 @@ function blockMainCanvasTemplatePlacement(event) {
 }
 
 function installCanvasTemplatePlacementGuard() {
-  const canvasElement = canvas?.app?.view;
+  const canvasElement = canvas?.app?.view ?? canvas?.app?.canvas ?? document.getElementById("board")?.querySelector("canvas");
   if (canvasTemplatePlacementGuardInstalled || !canvasElement) return;
 
   for (const eventName of BLOCKED_TEMPLATE_PLACEMENT_EVENTS) {
@@ -447,58 +594,97 @@ function installCanvasTemplatePlacementGuard() {
 }
 
 function installTemplateLayerPlacementGuard() {
-  const templateLayer = canvas?.templates;
-  if (!templateLayer || patchedTemplateLayers.has(templateLayer)) return;
+  try {
+    const templateLayer = canvas?.templates;
+    if (!templateLayer || patchedTemplateLayers.has(templateLayer)) return;
 
-  for (const methodName of BLOCKED_TEMPLATE_LAYER_METHODS) {
-    const originalMethod = templateLayer[methodName];
-    if (typeof originalMethod !== "function") continue;
+    for (const methodName of BLOCKED_TEMPLATE_LAYER_METHODS) {
+      const originalMethod = templateLayer[methodName];
+      if (typeof originalMethod !== "function") continue;
 
-    templateLayer[methodName] = function simpleCompanionTemplatePlacementGuard(event, ...args) {
-      if (methodName === "_onClickLeft" && suppressedTemplateLayerClicksRemaining > 0) {
-        suppressedTemplateLayerClicksRemaining -= 1;
-        consumeSuppressedTemplateEvent(event);
-        return false;
-      }
+      templateLayer[methodName] = function simpleCompanionTemplatePlacementGuard(event, ...args) {
+        if (methodName === "_onClickLeft" && suppressedTemplateLayerClicksRemaining > 0) {
+          suppressedTemplateLayerClicksRemaining -= 1;
+          consumeSuppressedTemplateEvent(event);
+          return false;
+        }
 
-      if (shouldSuppressMainTemplatePlacement()) {
-        consumeSuppressedTemplateEvent(event);
-        return false;
-      }
+        if (shouldSuppressMainTemplatePlacement()) {
+          consumeSuppressedTemplateEvent(event);
+          return false;
+        }
 
-      if (hasActiveDisplay() && getActiveTemplatePreview()) {
-        event?.preventDefault?.();
-        event?.stopPropagation?.();
-        return false;
-      }
+        if (hasActiveDisplay() && getActiveTemplatePreview()) {
+          event?.preventDefault?.();
+          event?.stopPropagation?.();
+          return false;
+        }
 
-      return originalMethod.call(this, event, ...args);
-    };
-  }
+        return originalMethod.call(this, event, ...args);
+      };
+    }
 
-  patchedTemplateLayers.add(templateLayer);
+    patchedTemplateLayers.add(templateLayer);
+  } catch { /* Layer methods may differ in v13 */ }
 }
 
 function installMeasuredTemplatePreviewGuard() {
-  const prototype = globalThis.CONFIG?.MeasuredTemplate?.objectClass?.prototype;
-  if (measuredTemplatePreviewGuardInstalled || !prototype) return;
+  try {
+    const prototype = globalThis.CONFIG?.MeasuredTemplate?.objectClass?.prototype;
+    if (measuredTemplatePreviewGuardInstalled || !prototype) return;
 
-  for (const methodName of BLOCKED_TEMPLATE_PREVIEW_METHODS) {
-    const originalMethod = prototype[methodName];
-    if (typeof originalMethod !== "function") continue;
+    for (const methodName of BLOCKED_TEMPLATE_PREVIEW_METHODS) {
+      const originalMethod = prototype[methodName];
+      if (typeof originalMethod !== "function") continue;
 
-    prototype[methodName] = function simpleCompanionTemplatePreviewGuard(event, ...args) {
-      if (hasActiveDisplay() && this.isPreview && getActiveTemplatePreview()) {
-        event?.preventDefault?.();
-        event?.stopPropagation?.();
-        return false;
-      }
+      prototype[methodName] = function simpleCompanionTemplatePreviewGuard(event, ...args) {
+        if (hasActiveDisplay() && this.isPreview && getActiveTemplatePreview()) {
+          event?.preventDefault?.();
+          event?.stopPropagation?.();
+          return false;
+        }
 
-      return originalMethod.call(this, event, ...args);
-    };
-  }
+        return originalMethod.call(this, event, ...args);
+      };
+    }
 
-  measuredTemplatePreviewGuardInstalled = true;
+    measuredTemplatePreviewGuardInstalled = true;
+  } catch { /* Prototype methods may differ in v13 */ }
+}
+
+function installRegionLayerPlacementGuard() {
+  try {
+    const regionLayer = canvas?.regions;
+    if (!regionLayer || patchedTemplateLayers.has(regionLayer)) return;
+
+    for (const methodName of BLOCKED_TEMPLATE_LAYER_METHODS) {
+      const originalMethod = regionLayer[methodName];
+      if (typeof originalMethod !== "function") continue;
+
+      regionLayer[methodName] = function simpleCompanionRegionPlacementGuard(event, ...args) {
+        if (methodName === "_onClickLeft" && suppressedTemplateLayerClicksRemaining > 0) {
+          suppressedTemplateLayerClicksRemaining -= 1;
+          consumeSuppressedTemplateEvent(event);
+          return false;
+        }
+
+        if (shouldSuppressMainTemplatePlacement()) {
+          consumeSuppressedTemplateEvent(event);
+          return false;
+        }
+
+        if (hasActiveDisplay() && getActiveTemplatePreview()) {
+          event?.preventDefault?.();
+          event?.stopPropagation?.();
+          return false;
+        }
+
+        return originalMethod.call(this, event, ...args);
+      };
+    }
+
+    patchedTemplateLayers.add(regionLayer);
+  } catch { /* Region layer methods may differ in v14 */ }
 }
 
 const COMPANION_BUTTON_SELECTOR = [
@@ -533,7 +719,7 @@ export class PlayerDisplay extends Application {
   }
 
   static get defaultOptions() {
-    return mergeObject(super.defaultOptions, {
+    return foundry.utils.mergeObject(super.defaultOptions, {
       id: "simple-companion-display",
       template: null,
       popOut: true,
@@ -845,7 +1031,7 @@ export class PlayerDisplay extends Application {
     return false;
   }
 
-  buildViewportHtml() {
+  async buildViewportHtml() {
     const token = this.getToken();
     if (!token) return `<p>No token on current scene</p>`;
 
@@ -859,7 +1045,7 @@ export class PlayerDisplay extends Application {
     const grid = this.buildGridHtml();
     const wallsHtml = this.buildWallsHtml(tokenCanvasCenter, gridSize);
     let tokensHtml = "";
-    const activeTemplatesHtml = this.buildActiveTemplatesHtml(tokenCanvasCenter, gridSize);
+    const activeTemplatesHtml = await this.buildActiveTemplatesHtml(tokenCanvasCenter, gridSize);
 
     // Player token
     const tokenFootprint = getTokenFootprint(token, gridPixels);
@@ -1060,7 +1246,7 @@ export class PlayerDisplay extends Application {
     const round = escapeHtml(combat.round ?? "-");
     const turn = escapeHtml((combat.turn ?? 0) + 1);
     const activeCombatantId = combat.combatant?.id;
-    const combatants = collectionValues(combat.turns ?? combat.combatants);
+    const combatants = collectionValues(combat.combatants);
 
     const combatantsHtml = combatants.map((combatant) => {
       const isTurn = activeCombatantId && combatant.id === activeCombatantId;
@@ -1182,22 +1368,23 @@ export class PlayerDisplay extends Application {
   }
 
   async _renderInner() {
-    return $(`
-      <div style="padding:20px; font-size:16px;">
-        <div style="
-          display:flex;
-          gap:16px;
-          align-items:flex-start;
-          width:100%;
-          overflow:hidden;
-        ">
-          <main style="flex:1 1 auto; min-width:0;">
-            ${this.buildViewportHtml()}
-          </main>
-          ${this.buildSidePanelHtml()}
-        </div>
+    const wrapper = document.createElement("div");
+    wrapper.style.cssText = "padding:20px; font-size:16px;";
+    wrapper.innerHTML = `
+      <div style="
+        display:flex;
+        gap:16px;
+        align-items:flex-start;
+        width:100%;
+        overflow:hidden;
+      ">
+        <main style="flex:1 1 auto; min-width:0;">
+          ${await this.buildViewportHtml()}
+        </main>
+        ${this.buildSidePanelHtml()}
       </div>
-    `);
+    `;
+    return wrapper;
   }
 
   activateListeners(html) {
@@ -1217,8 +1404,12 @@ export class PlayerDisplay extends Application {
     viewport?.addEventListener?.("pointerup", (event) => this.stopTemplateRotationDrag(event));
     viewport?.addEventListener?.("pointercancel", (event) => this.stopTemplateRotationDrag(event));
     installCanvasTemplatePlacementGuard();
-    installTemplateLayerPlacementGuard();
-    installMeasuredTemplatePreviewGuard();
+    if (isV14()) {
+      installRegionLayerPlacementGuard();
+    } else {
+      installTemplateLayerPlacementGuard();
+      installMeasuredTemplatePreviewGuard();
+    }
     this.startTemplateCapture();
 
     element?.addEventListener?.("click", (event) => {
@@ -1240,40 +1431,59 @@ export class PlayerDisplay extends Application {
     if (this.templateCaptureInterval) return;
 
     this.templateCaptureInterval = setInterval(() => {
-      if (this.captureActiveTemplatePreview()) {
-        this.refresh();
-      }
+      (async () => {
+        if (await this.captureActiveTemplatePreview()) {
+          this.refresh();
+        }
+      })();
     }, TEMPLATE_CAPTURE_INTERVAL);
   }
 
-  captureActiveTemplatePreview() {
+  async captureActiveTemplatePreview() {
     if (this.pendingTemplateData) return false;
 
     const preview = getActiveTemplatePreview();
+    if (!preview?.document) return false;
+
+    if (isV14()) {
+      const templateData = regionShapeToTemplateData(preview);
+      if (!templateData) return false;
+      this.pendingTemplateData = templateData;
+      this.pendingTemplateScreenPoint = { x: VIEWPORT_SIZE / 2, y: VIEWPORT_SIZE / 2 };
+      this.pendingTemplateIconPath = await getTemplateIconPath(preview);
+      clearNativeTemplatePreview(preview);
+      endNativeTemplatePlacementMode();
+      return true;
+    }
+
     if (!preview?.document?.toObject) return false;
 
     const templateData = preview.document.toObject();
     delete templateData._id;
     this.pendingTemplateData = templateData;
     this.pendingTemplateScreenPoint = { x: VIEWPORT_SIZE / 2, y: VIEWPORT_SIZE / 2 };
-    this.pendingTemplateIconPath = getTemplateIconPath(preview);
+    this.pendingTemplateIconPath = await getTemplateIconPath(preview);
 
     clearNativeTemplatePreview(preview);
     endNativeTemplatePlacementMode();
     return true;
   }
 
-  buildActiveTemplatesHtml(tokenCanvasCenter, gridSize) {
-    const templates = canvas.templates?.placeables ?? [];
-    if (!templates.length) return "";
+  async buildActiveTemplatesHtml(tokenCanvasCenter, gridSize) {
+    const placeables = isV14()
+      ? (canvas.regions?.placeables ?? [])
+      : (canvas.templates?.placeables ?? []);
+    if (!placeables.length) return "";
 
     const centerX = VIEWPORT_SIZE / 2;
     const centerY = VIEWPORT_SIZE / 2;
     const gridPixels = this.getViewportGridPixels();
     const elements = [];
 
-    for (const template of templates) {
-      const templateData = template?.document?.toObject?.();
+    for (const placeable of placeables) {
+      const templateData = isV14()
+        ? regionShapeToTemplateData(placeable)
+        : (placeable?.document?.toObject?.());
       if (!templateData) continue;
 
       const originX = centerX + ((templateData.x - tokenCanvasCenter.x) / gridSize) * gridPixels;
@@ -1285,7 +1495,7 @@ export class PlayerDisplay extends Application {
       const widthPixels = Math.max(templateDistanceToViewportPixels(templateData.width, gridPixels), gridPixels / 2);
       const direction = Number(templateData.direction ?? 0);
       const iconOffset = getTemplateIconOffset(templateData, gridPixels);
-      const iconPath = escapeHtml(getTemplateIconPath(template));
+      const iconPath = escapeHtml(await getTemplateIconPath(placeable));
 
       let shapeStyle = "";
 
@@ -1385,13 +1595,13 @@ export class PlayerDisplay extends Application {
     const elements = [];
 
     for (const wall of walls) {
-      const c = wall.document.c;
-      if (!c?.length) continue;
+      const coords = getWallCoords(wall);
+      if (!coords) continue;
 
-      const x1 = centerX + ((c[0] - tokenCanvasCenter.x) / gridSize) * gridPixels;
-      const y1 = centerY + ((c[1] - tokenCanvasCenter.y) / gridSize) * gridPixels;
-      const x2 = centerX + ((c[2] - tokenCanvasCenter.x) / gridSize) * gridPixels;
-      const y2 = centerY + ((c[3] - tokenCanvasCenter.y) / gridSize) * gridPixels;
+      const x1 = centerX + ((coords.x1 - tokenCanvasCenter.x) / gridSize) * gridPixels;
+      const y1 = centerY + ((coords.y1 - tokenCanvasCenter.y) / gridSize) * gridPixels;
+      const x2 = centerX + ((coords.x2 - tokenCanvasCenter.x) / gridSize) * gridPixels;
+      const y2 = centerY + ((coords.y2 - tokenCanvasCenter.y) / gridSize) * gridPixels;
 
       if ((x1 < bounds.left && x2 < bounds.left) || (x1 > bounds.right && x2 > bounds.right) ||
           (y1 < bounds.top && y2 < bounds.top) || (y1 > bounds.bottom && y2 > bounds.bottom)) {
@@ -1639,7 +1849,7 @@ export class PlayerDisplay extends Application {
     }
   }
 
-  syncTemplatePreviewToViewport(event) {
+  async syncTemplatePreviewToViewport(event) {
     this.captureActiveTemplatePreview();
     if (this.pendingTemplateData) {
       const viewportPoint = this.getViewportScreenPoint(event);
@@ -1655,23 +1865,35 @@ export class PlayerDisplay extends Application {
     }
 
     const preview = getActiveTemplatePreview();
-    if (!preview?.document?.updateSource) return null;
+    if (!preview?.document) return null;
 
     const snappedPoint = this.getViewportScenePoint(event);
     if (!snappedPoint) return null;
 
-    preview.document.updateSource({
-      x: snappedPoint.x,
-      y: snappedPoint.y
-    });
-    preview.refresh?.();
-    preview.renderFlags?.set?.({ refresh: true });
-    preview.position?.set?.(snappedPoint.x, snappedPoint.y);
+    if (!isV14()) {
+      if (!preview.document.updateSource) return null;
+      try {
+        await preview.document.updateSource({
+          x: snappedPoint.x,
+          y: snappedPoint.y
+        });
+      } catch { /* updateSource signature may differ */ }
+      preview.refresh?.();
+      preview.position?.set?.(snappedPoint.x, snappedPoint.y);
+    } else {
+      if (!preview.document.updateSource) return null;
+      try {
+        await preview.document.updateSource({
+          x: snappedPoint.x,
+          y: snappedPoint.y
+        });
+      } catch { }
+    }
 
     return { preview, snappedPoint };
   }
 
-  handleViewportPointerMove(event) {
+  async handleViewportPointerMove(event) {
     if (this.isTemplateRotationDragging && this.pendingTemplateData) {
       if (this.templateRotationPointerId !== null && event.pointerId !== this.templateRotationPointerId) return;
       const viewportPoint = this.getViewportScreenPoint(event);
@@ -1680,7 +1902,7 @@ export class PlayerDisplay extends Application {
     }
 
     if (this.pendingTemplateData) return;
-    this.syncTemplatePreviewToViewport(event);
+    await this.syncTemplatePreviewToViewport(event);
   }
 
   async handleViewportPointerDown(event) {
@@ -1693,24 +1915,31 @@ export class PlayerDisplay extends Application {
     if (isTemplateActionTarget(event)) return;
 
     if (this.pendingTemplateData) {
-      const previewState = this.syncTemplatePreviewToViewport(event);
+      const previewState = await this.syncTemplatePreviewToViewport(event);
       if (!previewState?.snappedPoint) return;
       event.preventDefault();
       event.stopPropagation();
       return;
     }
 
-    const previewState = this.syncTemplatePreviewToViewport(event);
+    const previewState = await this.syncTemplatePreviewToViewport(event);
     const preview = previewState?.preview ?? getActiveTemplatePreview();
-    if (!preview?.document?.toObject && !previewState?.templateData) return;
+    if (!preview?.document && !previewState?.templateData) return;
     const snappedPoint = previewState?.snappedPoint ?? this.getViewportScenePoint(event);
     if (!snappedPoint || !canvas.scene) return;
 
-    this.pendingTemplateData = previewState?.templateData
-      ? cloneValue(previewState.templateData)
-      : preview.document.toObject();
+    if (isV14()) {
+      const templateData = regionShapeToTemplateData(preview);
+      if (!templateData) return;
+      this.pendingTemplateData = templateData;
+    } else {
+      if (!preview?.document?.toObject && !previewState?.templateData) return;
+      this.pendingTemplateData = previewState?.templateData
+        ? cloneValue(previewState.templateData)
+        : preview.document.toObject();
+    }
     delete this.pendingTemplateData._id;
-    this.pendingTemplateIconPath = getTemplateIconPath(preview);
+    this.pendingTemplateIconPath = await getTemplateIconPath(preview);
     this.pendingTemplateScreenPoint = this.getViewportScreenPoint(event) ?? this.pendingTemplateScreenPoint ?? { x: VIEWPORT_SIZE / 2, y: VIEWPORT_SIZE / 2 };
 
     clearNativeTemplatePreview(preview);
@@ -1752,8 +1981,15 @@ export class PlayerDisplay extends Application {
     templateData.x = snappedPoint.x;
     templateData.y = snappedPoint.y;
 
-    await canvas.scene.createEmbeddedDocuments("MeasuredTemplate", [templateData]);
-    canvas.templates.clearPreviewContainer?.();
+    if (isV14()) {
+      const regionData = templateDataToRegionData(templateData);
+      if (regionData) {
+        await canvas.scene.createEmbeddedDocuments("Region", [regionData]);
+      }
+    } else {
+      await canvas.scene.createEmbeddedDocuments("MeasuredTemplate", [templateData]);
+      canvas.templates.clearPreviewContainer?.();
+    }
     clearNativeTemplatePreview(getActiveTemplatePreview());
     endNativeTemplatePlacementMode();
     this.pendingTemplateData = null;
@@ -1763,7 +1999,7 @@ export class PlayerDisplay extends Application {
     this.templateRotationPointerId = null;
     suppressMainTemplatePlacementFor();
     suppressNextTemplateLayerClicks(1);
-    suppressNextMeasuredTemplateCreates(1);
+    if (!isV14()) suppressNextMeasuredTemplateCreates(1);
     this.refresh();
   }
 
@@ -1779,20 +2015,32 @@ export class PlayerDisplay extends Application {
     clearNativeTemplatePreview(getActiveTemplatePreview());
     endNativeTemplatePlacementMode();
     suppressMainTemplatePlacementFor();
-    suppressNextTemplateLayerClicks(1);
-    suppressNextMeasuredTemplateCreates(1);
+    if (isV14()) {
+      suppressNextTemplateLayerClicks(1);
+    } else {
+      suppressNextTemplateLayerClicks(1);
+      suppressNextMeasuredTemplateCreates(1);
+    }
     this.refresh();
   }
 
   async openNativeChatPopout() {
-    const chat = ui.sidebar?.tabs?.chat ?? ui.sidebar?.tabs?.get?.("chat") ?? ui.chat;
-    if (!chat?.renderPopout) {
+    const chat = ui.chat ?? ui.sidebar?.tabs?.chat ?? ui.sidebar?.tabs?.get?.("chat");
+    if (!chat) {
       ui.sidebar?.activateTab?.("chat");
-      ui.sidebar?.changeTab?.("chat", "primary");
       return;
     }
 
-    const popout = await chat.renderPopout();
+    let popout;
+    if (chat.renderPopout) {
+      popout = await chat.renderPopout();
+    } else if (chat.render && !chat.rendered) {
+      popout = await chat.render(true, { popOut: true });
+    } else {
+      ui.sidebar?.activateTab?.("chat");
+      return;
+    }
+
     const element = getHtmlElement(this.element);
     const panelBody = element?.querySelector?.(`#simple-companion-side-panel-body-${this.displayIndex}`);
     const rect = panelBody?.getBoundingClientRect?.();
@@ -1806,7 +2054,7 @@ export class PlayerDisplay extends Application {
       });
     }
 
-    popout?.bringToFront?.();
+    (popout?.bringToTop ?? popout?.bringToFront)?.();
   }
 
   refresh() {
