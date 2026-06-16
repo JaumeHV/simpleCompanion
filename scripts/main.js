@@ -41,7 +41,7 @@ function buildDisplayTool(displayIndex) {
     icon: "fas fa-tv",
     order: displayIndex,
     button: true,
-    onClick: () => openDisplay(displayIndex)
+    onChange: () => openDisplay(displayIndex)
   };
 }
 

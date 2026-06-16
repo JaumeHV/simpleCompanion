@@ -479,12 +479,12 @@ const COMPANION_BUTTON_SELECTOR = [
   "[data-companion-template-rotate-handle]"
 ].join(", ");
 
-export class PlayerDisplay extends Application {
+export class PlayerDisplay extends foundry.applications.api.ApplicationV2 {
   constructor(displayIndex, options = {}) {
-    super(options);
+    super({ id: `simple-companion-display-${displayIndex}`, ...options });
     this.displayIndex = displayIndex;
     this.lastRefreshTime = 0;
-    this.refreshDebounceDelay = 50; // ms
+    this.refreshDebounceDelay = 50;
     this.pendingRefresh = null;
     this.activePanel = "combat";
     this.pendingTemplateData = null;
@@ -497,18 +497,19 @@ export class PlayerDisplay extends Application {
     activeDisplays[displayIndex] = this;
   }
 
-  static get defaultOptions() {
-    return {
-      ...super.defaultOptions,
-      id: "simple-companion-display",
-      template: null,
-      popOut: true,
+  static DEFAULT_OPTIONS = {
+    id: "simple-companion-display",
+    window: {
+      title: "Player Display",
+      icon: "fas fa-tv",
+      frame: true,
+      resizable: true
+    },
+    position: {
       width: 1280,
-      height: 800,
-      resizable: true,
-      title: "Player Display"
-    };
-  }
+      height: 800
+    }
+  };
 
   get id() {
     return `simple-companion-display-${this.displayIndex}`;
@@ -544,7 +545,7 @@ export class PlayerDisplay extends Application {
     return tokens.length ? tokens[0] : null;
   }
 
-  async getData() {
+  _prepareContext(options) {
     const actor = this.getActor();
 
     if (!actor) {
@@ -1147,7 +1148,7 @@ export class PlayerDisplay extends Application {
     `;
   }
 
-  async _renderInner() {
+  async _renderHTML(context) {
     const wrapper = document.createElement("div");
     wrapper.style.cssText = "padding:20px; font-size:16px;";
     wrapper.innerHTML = `
@@ -1167,17 +1168,10 @@ export class PlayerDisplay extends Application {
     return wrapper;
   }
 
-  activateListeners(html) {
-    super.activateListeners(html);
+  _activateListeners(htmlElement) {
+    super._activateListeners(htmlElement);
 
-    if (typeof html?.find === "function") {
-      html.find(COMPANION_BUTTON_SELECTOR).off("click.simpleCompanion").on("click.simpleCompanion", (event) => {
-        this.handleCompanionButtonClick(event, event.currentTarget);
-      });
-    }
-
-    const element = getHtmlElement(html);
-    const viewport = element?.querySelector?.(`#simple-companion-viewport-${this.displayIndex}`);
+    const viewport = htmlElement.querySelector?.(`#simple-companion-viewport-${this.displayIndex}`);
     viewport?.addEventListener?.("click", (event) => this.handleViewportClick(event));
     viewport?.addEventListener?.("pointerdown", (event) => this.handleViewportPointerDown(event));
     viewport?.addEventListener?.("pointermove", (event) => this.handleViewportPointerMove(event));
@@ -1185,16 +1179,16 @@ export class PlayerDisplay extends Application {
     viewport?.addEventListener?.("pointercancel", (event) => this.stopTemplateRotationDrag(event));
     installCanvasGuard();
 
-    element?.addEventListener?.("click", (event) => {
+    htmlElement.addEventListener?.("click", (event) => {
       const target = event.target?.closest?.(COMPANION_BUTTON_SELECTOR);
-      if (target && element.contains?.(target)) {
+      if (target && htmlElement.contains?.(target)) {
         this.handleCompanionButtonClick(event, target);
       }
     });
 
-    element?.addEventListener?.("pointerdown", (event) => {
+    htmlElement.addEventListener?.("pointerdown", (event) => {
       const target = event.target?.closest?.("[data-companion-template-rotate-handle]");
-      if (target && element.contains?.(target)) {
+      if (target && htmlElement.contains?.(target)) {
         this.startTemplateRotationDrag(event);
       }
     });
@@ -1790,7 +1784,7 @@ export class PlayerDisplay extends Application {
     }
   }
 
-  close(options) {
+  async close(options) {
     if (this.pendingRefresh) {
       clearTimeout(this.pendingRefresh);
     }
