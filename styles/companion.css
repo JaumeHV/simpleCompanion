@@ -1,1 +1,130 @@
-/* Simple Companion v2.0.0 */
+:root {
+  --sc-bg: #1a1d24;
+  --sc-bg-panel: #22262e;
+  --sc-bg-nav: #181b22;
+  --sc-bg-btn: transparent;
+  --sc-bg-btn-hover: #2a2e38;
+  --sc-bg-btn-active: #1e2a3a;
+  --sc-border: #2a2e38;
+  --sc-accent: #6aa8ff;
+  --sc-text: #c5c9d6;
+  --sc-text-muted: #8a91a0;
+  --sc-text-dim: #5a6070;
+  --sc-portrait-border: #ffffff;
+}
+
+.companion-shell {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  height: 100%;
+  background: var(--sc-bg);
+  overflow: hidden;
+}
+
+.companion-main {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.companion-portrait {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid var(--sc-portrait-border);
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+
+.companion-portrait img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.companion-panel-content {
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.companion-nav {
+  width: 90px;
+  display: flex;
+  flex-direction: column;
+  background: var(--sc-bg-nav);
+  border-left: 1px solid var(--sc-border);
+  flex-shrink: 0;
+}
+
+.companion-nav-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: var(--sc-bg-btn);
+  border: none;
+  border-left: 3px solid transparent;
+  color: var(--sc-text-muted);
+  cursor: pointer;
+  font-size: 11px;
+  font-family: inherit;
+  padding: 4px;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  min-height: 0;
+  position: relative;
+}
+
+.companion-nav-btn:hover {
+  background: var(--sc-bg-btn-hover);
+  color: var(--sc-text);
+}
+
+.companion-nav-btn.active {
+  background: var(--sc-bg-btn-active);
+  border-left-color: var(--sc-accent);
+  color: #fff;
+}
+
+.companion-nav-btn i {
+  font-size: 20px;
+}
+
+.panel-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--sc-text-dim);
+  text-align: center;
+}
+
+.panel-placeholder i {
+  font-size: 48px;
+  margin-bottom: 16px;
+  color: #3a3f4e;
+}
+
+.panel-placeholder h2 {
+  font-size: 24px;
+  color: var(--sc-text-muted);
+  margin: 0 0 8px;
+  font-weight: 600;
+}
+
+.panel-placeholder p {
+  font-size: 14px;
+  margin: 0;
+  color: var(--sc-text-dim);
+}
